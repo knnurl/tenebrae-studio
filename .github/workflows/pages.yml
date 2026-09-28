@@ -11,9 +11,11 @@ permissions:
   pages: write
   id-token: write
 
+# One queue per branch, so a pull request's tests can never cancel a deploy from main.
+# A newer PR run replaces an older one; a deploy on main is allowed to finish.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
