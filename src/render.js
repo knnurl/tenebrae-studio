@@ -9,7 +9,7 @@ void main(){ vec3 w = aPos + uOffset; vW = w; vN = aNrm; vec4 c = uVP * vec4(w, 
 const SCENE_FS = `#version 300 es
 precision highp float; precision highp int;
 in vec3 vW; in vec3 vN; out vec4 outC;
-struct Shell { float shape; float R; float T; float zBot; float zTop; float sLo; float sMid; float sHi; float n1; float n2; float rows; float cols; float rot; float cap; float sC; float rhoC; };
+struct Shell { float shape; float R; float T; float zBot; float zTop; float sLo; float sMid; float sHi; float n1; float n2; float rows; float cols; float rot; float cap; float sC; float rhoC; float capB; float sCB; float rhoCB; };
 uniform Shell uS[2];
 uniform sampler2D uMaskA; uniform sampler2D uMaskB;
 uniform vec3 uLamp; uniform int uKind; uniform int uShell; uniform vec3 uAlbedo;
@@ -22,6 +22,7 @@ bool solidAt(int k, vec3 p){
   float rho = length(p.xy); float Ro = uS[k].R + uS[k].T;
   float s;
   if (uS[k].cap > 0.5 && p.z > 0.0 && uS[k].zTop * rho < uS[k].rhoC * p.z) s = uS[k].sC + uS[k].rhoC - uS[k].zTop * rho / p.z;
+  else if (uS[k].capB > 0.5 && p.z < 0.0 && uS[k].zBot * rho > uS[k].rhoCB * p.z) s = uS[k].sCB - uS[k].rhoCB + uS[k].zBot * rho / p.z;
   else s = uS[k].shape < 0.5 ? Ro * p.z / max(rho, 1e-4) : Ro * atan(p.z, rho);
   if (s <= uS[k].sLo || s >= uS[k].sHi) return true;
   float row = s < uS[k].sMid ? (s - uS[k].sLo) / (uS[k].sMid - uS[k].sLo) * uS[k].n1
@@ -43,14 +44,13 @@ float transmit(vec3 S, vec3 P){
   vec3 d = P - S; float L = length(d); vec3 D = d / L;
   for (int k = 0; k < 2; k++) for (int f = 0; f < 2; f++) {
     float l = hitShell(k, f, S, D);
-    bool capped = uS[k].cap > 0.5;
-    if (capped) {
-      float zc = uS[k].zTop - (f == 0 ? uS[k].T : 0.0);
-      if (l <= 0.0 || S.z + l * D.z > zc) { if (D.z <= 1e-6) continue; l = (zc - S.z) / D.z; }
-    }
+    bool capT = uS[k].cap > 0.5, capB = uS[k].capB > 0.5;
+    float zh = S.z + l * D.z;
+    if (capT && D.z > 1e-6 && (l <= 0.0 || zh > uS[k].zTop - (f == 0 ? uS[k].T : 0.0))) l = (uS[k].zTop - (f == 0 ? uS[k].T : 0.0) - S.z) / D.z;
+    else if (capB && D.z < -1e-6 && (l <= 0.0 || zh < uS[k].zBot + (f == 0 ? uS[k].T : 0.0))) l = (uS[k].zBot + (f == 0 ? uS[k].T : 0.0) - S.z) / D.z;
     if (l > 0.0 && l < L - 0.05) {
       vec3 H = S + l * D;
-      bool exists = capped ? H.z >= uS[k].zBot : (H.z >= uS[k].zBot && H.z <= uS[k].zTop);
+      bool exists = (capB || H.z >= uS[k].zBot) && (capT || H.z <= uS[k].zTop);
       if (exists && solidAt(k, H)) return 0.0;
     }
   }
@@ -160,14 +160,14 @@ function createRenderer(canvas) {
   // Shell preview surfaces (smooth faces; holes come from the mask in the shader).
   function setShell(k, G) {
     meshes.lamp[k].forEach(m => m.m.free()); meshes.lamp[k] = [];
-    const U = { shape: 0, R: 1, T: 0, zBot: 1, zTop: 0, sLo: 0, sMid: 1, sHi: 2, n1: 1, n2: 0, rows: 1, cols: 1, rot: 0, cap: 0, sC: 0, rhoC: 0 };
+    const U = { shape: 0, R: 1, T: 0, zBot: 1, zTop: 0, sLo: 0, sMid: 1, sHi: 2, n1: 1, n2: 0, rows: 1, cols: 1, rot: 0, cap: 0, sC: 0, rhoC: 0, capB: 0, sCB: 0, rhoCB: 0 };
     gl.bindTexture(gl.TEXTURE_2D, tex[k]); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     if (!G || !G.ok) {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255]));
       shellU[k] = U; texParams(); return;
     }
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, G.Nc, G.Nb, 0, gl.RED, gl.UNSIGNED_BYTE, G.tex); texParams();
-    Object.assign(U, { shape: G.sph ? 1 : 0, R: G.R, T: G.t, zBot: G.zBot, zTop: G.zTop, sLo: G.sLo, sMid: G.sMid, sHi: G.sHi, n1: G.n1, n2: G.n2, rows: G.Nb, cols: G.Nc, cap: G.cap ? 1 : 0, sC: G.sC, rhoC: G.rhoC });
+    Object.assign(U, { shape: G.sph ? 1 : 0, R: G.R, T: G.t, zBot: G.zBot, zTop: G.zTop, sLo: G.sLo, sMid: G.sMid, sHi: G.sHi, n1: G.n1, n2: G.n2, rows: G.Nb, cols: G.Nc, cap: G.cap ? 1 : 0, sC: G.sC, rhoC: G.rhoC, capB: G.capB ? 1 : 0, sCB: G.sCB, rhoCB: G.rhoCB });
     shellU[k] = U;
     const rows = G.rows, step = Math.max(1, Math.floor(G.Nb / 110)), pick = [];
     for (let j = 0; j < rows.length; j++) if (rows[j].band < 0 || rows[j].band % step === 0 || j === rows.length - 1) pick.push(rows[j]);
@@ -185,13 +185,20 @@ function createRenderer(canvas) {
           if (j > 0 && i < C) { const a0i = (j - 1) * (C + 1) + i, b0 = j * (C + 1) + i; idx.push(a0i, a0i + 1, b0 + 1, a0i, b0 + 1, b0); }
         }
       });
-      if (G.cap) { // hub disc
+      if (G.cap && !G.boreT) { // top hub disc
         const cz = P(last)[1], ci = pos.length / 3; pos.push(0, 0, cz); nrm.push(0, 0, sg);
         for (let i = 0; i < C; i++) idx.push(last * (C + 1) + i, last * (C + 1) + i + 1, ci);
       }
+      if (G.capB && !G.boreB) { // bottom hub disc
+        const cz = P(0)[1], ci = pos.length / 3; pos.push(0, 0, cz); nrm.push(0, 0, -sg);
+        for (let i = 0; i < C; i++) idx.push(i, i + 1, ci);
+      }
       meshes.lamp[k].push({ m: mesh(pos, nrm, idx), kind: 1 });
     }
-    for (const [r, nz] of G.cap ? [[rows[0], -1]] : [[rows[0], -1], [rows[rows.length - 1], 1]]) {
+    const ends = [];
+    if (!(G.capB && !G.boreB)) ends.push([rows[0], -1]);
+    if (!(G.cap && !G.boreT)) ends.push([rows[rows.length - 1], 1]);
+    for (const [r, nz] of ends) {
       const pos = [], nrm = [], idx = [];
       for (let i = 0; i <= C; i++) {
         const a = i / C * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);

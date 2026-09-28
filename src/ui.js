@@ -73,17 +73,24 @@
 
   // ---------- decisions and their knock-on settings ----------
   const TARGETS = {
-    ceiling: { label: 'Ceiling and upper walls', apply: () => { setDie('up'); setCaps(true); return 'Emitter set to an upward LED die; top caps on.'; },
+    ceiling: { label: 'Ceiling and upper walls', apply: () => { setDie('up'); setCaps(true, false); return 'Emitter set to an upward LED die; top caps on, bottom caps off.'; },
       why: 'An upward die gives the crispest shadows. Top caps pattern the ceiling instead of throwing a bright disc.' },
-    walls: { label: 'Walls at lamp height', apply: () => { S.source.type = 'line'; S.source.emit = 'omni'; setCaps(false); return 'Emitter set to a vertical filament; caps off.'; },
+    walls: { label: 'Walls at lamp height', apply: () => { S.source.type = 'line'; S.source.emit = 'omni'; setCaps(false, false); return 'Emitter set to a vertical filament; caps off.'; },
       why: 'A vertical filament lights all round. Vertical slots stay sharp; horizontal features blur along its length.' },
-    floor: { label: 'Floor and lower walls', apply: () => { setDie('down'); setCaps(false); return 'Emitter set to a downward LED die; caps off.'; },
-      why: 'A downward die. Bottom caps are not built yet, so the open bottom throws a bright disc on the floor.' },
-    everywhere: { label: 'Everywhere', apply: () => { setDie('omni'); setCaps(true); return 'Emitter set to all directions (two dies back to back); top caps on.'; },
-      why: 'Two dies back to back approximate all-round light, with a dim band at lamp height.' },
+    floor: { label: 'Floor and lower walls', apply: () => { setDie('down'); setCaps(false, true); return 'Emitter set to a downward LED die; bottom caps on, top caps off.'; },
+      why: 'A downward die. Bottom caps pattern the floor instead of throwing a bright disc.' },
+    everywhere: { label: 'Everywhere', apply: () => { setDie('omni'); setCaps(true, true); return 'Emitter set to all directions (two dies back to back); top and bottom caps on.'; },
+      why: 'All-round light, with both ends capped so the ceiling and floor carry the pattern too. A filament also counts as all-round.' },
   };
   function setDie(emit) { if (S.source.type !== 'disc' && S.source.type !== 'point') { S.source.type = 'disc'; S.source.size = 1.4; } S.source.emit = emit; R && R.setEmitter(S.source); }
-  function setCaps(on) { S.shells.forEach(sh => { sh.cap.on = on; }); }
+  function setCaps(top, bottom) { S.shells.forEach(sh => { sh.cap.on = top; sh.capBot.on = bottom; }); applyStem(); }
+  // The stem enters from above on a pendant and from below on a table lamp. Capped stem ends get bores:
+  // the inner bore passes a 10 mm LED board, the outer bore rides on an 8 mm stem as a plain bearing.
+  const STEM_BORE = [6, 4.5];
+  function applyStem() {
+    const fromTop = S.lamp.mount === 'pendant';
+    S.shells.forEach((sh, k) => { sh.cap.bore = fromTop ? STEM_BORE[k] : 0; sh.capBot.bore = fromTop ? 0 : STEM_BORE[k]; });
+  }
   const MOUNT_Z = { table: 900, pendant: 1900 };
   const EMIT = { point: 'Point', disc: 'LED die', line: 'Filament', sphere: 'Frosted bulb' };
   const FACING = { up: 'facing up', down: 'facing down', omni: 'all round' };
@@ -100,7 +107,11 @@
       el('p', { class: 'hint' }, ADV() ? 'Every parameter is shown.' : 'Work down the steps. Each shows only the settings that shape the look.')));
 
     section('lamp', 1, 'Lamp', () => `${S.lamp.mount === 'pendant' ? 'Pendant' : 'Table lamp'}, light at ${Math.round(S.room.lampZ)} mm`, b => {
-      select(b, 'Mount', S.lamp, 'mount', [['table', 'Table lamp'], ['pendant', 'Pendant']], 'room', true, v => { S.room.lampZ = MOUNT_Z[v]; toast(`Light height set to ${MOUNT_Z[v]} mm above the floor.`); });
+      select(b, 'Mount', S.lamp, 'mount', [['table', 'Table lamp'], ['pendant', 'Pendant']], 'room', true, v => {
+        S.room.lampZ = MOUNT_Z[v]; applyStem(); build(false);
+        toast(`Light height set to ${MOUNT_Z[v]} mm. The stem now enters from the ${v === 'pendant' ? 'top' : 'bottom'}, so capped ${v === 'pendant' ? 'top' : 'bottom'} ends get stem bores.`);
+      });
+      note(b, S.lamp.mount === 'pendant' ? 'The stem comes down through the top caps.' : 'The stem comes up through the bottom caps.');
       if (ADV()) slider(b, 'Light height above floor (mm)', S.room, 'lampZ', 150, 4800, 10, 'room');
     });
 
@@ -121,7 +132,7 @@
       }
     });
 
-    section('shells', 4, 'Shells', () => { const [A, B] = S.shells; return `${A.shape === 'sphere' ? 'Spheres' : 'Cylinders'}, ${+A.R.toFixed(1)} and ${+B.R.toFixed(1)} mm${A.cap.on || B.cap.on ? ', capped' : ''}`; }, shellsSection);
+    section('shells', 4, 'Shells', () => { const [A, B] = S.shells; const t = A.cap.on || B.cap.on, bt = A.capBot.on || B.capBot.on; return `${A.shape === 'sphere' ? 'Spheres' : 'Cylinders'}, ${+A.R.toFixed(1)} and ${+B.R.toFixed(1)} mm${t && bt ? ', capped both ends' : t ? ', top capped' : bt ? ', bottom capped' : ''}`; }, shellsSection);
     section('pattern', 5, 'Pattern', () => patSummary(S.shells[0].pattern), b => {
       const A = S.shells[0];
       b.append(el('div', { class: 'btnrow' },
@@ -129,8 +140,12 @@
         el('button', { class: 'btn ghost', id: 'undo', type: 'button', onclick: undoRandom, disabled: UI.undo ? false : '' }, 'Undo')));
       patternControls(b, A.pattern, 'Generator', 'A');
       if (A.cap.on) {
-        check(b, 'Cap follows wall pattern', A.cap, 'follow', 'geom', true);
-        if (!A.cap.follow) patternControls(b, A.cap.pattern, 'Cap generator', 'Acap');
+        check(b, 'Top cap follows wall pattern', A.cap, 'follow', 'geom', true);
+        if (!A.cap.follow) patternControls(b, A.cap.pattern, 'Top cap generator', 'Acap');
+      }
+      if (A.capBot.on) {
+        check(b, 'Bottom cap follows wall pattern', A.capBot, 'follow', 'geom', true);
+        if (!A.capBot.follow) patternControls(b, A.capBot.pattern, 'Bottom cap generator', 'Abot');
       }
       note(b, 'Randomize changes the visible, unlocked sliders here and in the moiré step, and keeps the first result that passes the print checks.');
     });
@@ -161,7 +176,8 @@
     slider(b, 'Radius (mm)', A, 'R', 15, 250, 0.5, 'geom');
     slider(b, 'Top, above the light (mm)', A, 'zTop', 0, 300, 0.5, 'geom');
     slider(b, 'Bottom, below the light (mm)', A, 'zBot', -300, 0, 0.5, 'geom');
-    check(b, 'Top caps', A.cap, 'on', 'geom', true, v => { B.cap.on = v; });
+    check(b, 'Top caps', A.cap, 'on', 'geom', true, v => { B.cap.on = v; applyStem(); });
+    check(b, 'Bottom caps', A.capBot, 'on', 'geom', true, v => { B.capBot.on = v; applyStem(); });
     check(b, 'Fit outer shell automatically', S.fit, 'auto', 'geom', true, v => { if (v) S.fit.gap = Math.max(2, +(B.R - A.R - A.t).toFixed(1)); });
     if (S.fit.auto) slider(b, 'Gap between shells (mm)', S.fit, 'gap', 2, 40, 0.5, 'geom');
     else {
@@ -172,13 +188,19 @@
     for (const k of [0, 1]) {
       const sh = S.shells[k];
       b.append(el('h3', { class: 'sub' }, k ? 'Outer shell' : 'Inner shell'));
-      if (k === 1 && S.fit.auto) { note(b, 'Fitted from the inner shell and the gap. Untick “Fit outer shell automatically” to edit it.'); continue; }
+      if (k === 1 && S.fit.auto) {
+        note(b, 'Fitted from the inner shell and the gap. Untick “Fit outer shell automatically” to edit it. Its stem bores stay editable:');
+        if (sh.cap.on) slider(b, 'Outer top bore radius (mm)', sh.cap, 'bore', 0, 40, 0.5, 'geom');
+        if (sh.capBot.on) slider(b, 'Outer bottom bore radius (mm)', sh.capBot, 'bore', 0, 40, 0.5, 'geom');
+        continue;
+      }
       slider(b, 'Wall (mm)', sh, 't', 1, 8, 0.1, 'geom');
       if (k === 1) { slider(b, 'Outer bottom, below the light (mm)', sh, 'zBot', -320, 0, 0.5, 'geom'); }
-      slider(b, 'Bottom rim (mm)', sh, 'rimBot', 1, 60, 0.5, 'geom');
+      slider(b, sh.capBot.on ? 'Corner band, wall to bottom cap (mm)' : 'Bottom rim (mm)', sh, 'rimBot', 1, 60, 0.5, 'geom');
       slider(b, sh.cap.on ? 'Corner band, wall to cap (mm)' : 'Top rim (mm)', sh, 'rimTop', 1, 60, 0.5, 'geom');
-      if (k === 1) check(b, 'Top cap', sh.cap, 'on', 'geom', true);
-      if (sh.cap.on) slider(b, 'Cap hub radius (mm)', sh.cap, 'hub', 2, 60, 0.5, 'geom');
+      if (k === 1) { check(b, 'Top cap', sh.cap, 'on', 'geom', true); check(b, 'Bottom cap', sh.capBot, 'on', 'geom', true); }
+      if (sh.cap.on) { slider(b, 'Top hub radius (mm)', sh.cap, 'hub', 2, 60, 0.5, 'geom'); slider(b, 'Top bore radius (mm, 0 = solid)', sh.cap, 'bore', 0, 40, 0.5, 'geom'); }
+      if (sh.capBot.on) { slider(b, 'Bottom hub radius (mm)', sh.capBot, 'hub', 2, 60, 0.5, 'geom'); slider(b, 'Bottom bore radius (mm, 0 = solid)', sh.capBot, 'bore', 0, 40, 0.5, 'geom'); }
     }
   }
 
@@ -206,8 +228,12 @@
     } else {
       patternControls(b, B.pattern, 'Outer generator', 'B');
       if (B.cap.on) {
-        check(b, 'Outer cap follows its wall pattern', B.cap, 'follow', 'geom', true);
-        if (!B.cap.follow) patternControls(b, B.cap.pattern, 'Outer cap generator', 'Bcap');
+        check(b, 'Outer top cap follows its wall pattern', B.cap, 'follow', 'geom', true);
+        if (!B.cap.follow) patternControls(b, B.cap.pattern, 'Outer top cap generator', 'Bcap');
+      }
+      if (B.capBot.on) {
+        check(b, 'Outer bottom cap follows its wall pattern', B.capBot, 'follow', 'geom', true);
+        if (!B.capBot.follow) patternControls(b, B.capBot.pattern, 'Outer bottom cap generator', 'Bbot');
       }
       if (ADV()) check(b, 'Mirror', S.link, 'mirror', 'geom');
     }
@@ -247,6 +273,10 @@
 
   function makeSection(b) {
     select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF']], 'geom', true);
+    if (S.shells.some(sh => sh.shape === 'cylinder' && (sh.cap.on || sh.capBot.on))) {
+      check(b, 'Export caps as separate parts', S.process, 'capsSeparate', 'geom', true);
+      if (S.process.capsSeparate) note(b, 'Each capped cylinder exports as a wall tube plus flat cap discs, one wall thick, that sit on the tube ends. Tubes print upright and discs print flat, both without support. The outer shell no longer needs a seam split to assemble.');
+    }
     UI.makeNote = note(b, ''); makeHint();
     if (!ADV()) return;
     slider(b, 'Minimum web (mm)', S.process, 'minWeb', 0.6, 6, 0.1, 'geom');
@@ -282,7 +312,12 @@
   function randTargets() {
     const [A, B] = S.shells, T = [{ pat: A.pattern, who: 'A' }];
     if (A.cap.on && !A.cap.follow) T.push({ pat: A.cap.pattern, who: 'Acap' });
-    if (S.link.mode === 'independent') { T.push({ pat: B.pattern, who: 'B' }); if (B.cap.on && !B.cap.follow) T.push({ pat: B.cap.pattern, who: 'Bcap' }); }
+    if (A.capBot.on && !A.capBot.follow) T.push({ pat: A.capBot.pattern, who: 'Abot' });
+    if (S.link.mode === 'independent') {
+      T.push({ pat: B.pattern, who: 'B' });
+      if (B.cap.on && !B.cap.follow) T.push({ pat: B.cap.pattern, who: 'Bcap' });
+      if (B.capBot.on && !B.capBot.follow) T.push({ pat: B.capBot.pattern, who: 'Bbot' });
+    }
     return T;
   }
   function randomize() {
@@ -295,7 +330,8 @@
         const tmp = Object.assign({}, S, cand);
         changedN = 0;
         for (const t of randTargets()) {
-          const pat = t.who[0] === 'A' ? (t.who === 'A' ? tmp.shells[0].pattern : tmp.shells[0].cap.pattern) : (t.who === 'B' ? tmp.shells[1].pattern : tmp.shells[1].cap.pattern);
+          const sh = tmp.shells[t.who[0] === 'A' ? 0 : 1], part = t.who.slice(1);
+          const pat = part === 'cap' ? sh.cap.pattern : part === 'bot' ? sh.capBot.pattern : sh.pattern;
           const P = pat.params[pat.gen];
           for (const q of GENS[pat.gen].params) {
             if (q.type === 'bool' || (!ADV() && !q.basic) || UI.locks.includes(`${t.who}.${pat.gen}.${q.k}`)) continue;
@@ -307,8 +343,8 @@
         if (tmp.link.mode === 'linked' && !UI.locks.includes('link.detune')) { tmp.link.detune = DETUNES[Math.floor(Math.random() * DETUNES.length)]; changedN++; }
         if (!changedN) break;
         if (tmp.fit.auto) fitOuter(tmp);
-        const pats = effectivePatterns(tmp), caps = effectiveCaps(tmp);
-        const g = [0, 1].map(k => buildShell(tmp.shells[k], pats[k], { res: Math.max(1.0, S.res * 1.6), fillSmall: S.process.fillSmall, minWeb: S.process.minWeb, minHole: S.process.minHole, split: S.process.split, seam: S.process.seam, mirror: k === 1 && tmp.link.mirror, capPattern: caps[k], capFollow: capFollows(tmp, k), fdm: S.process.profile === 'FDM' }));
+        const pats = effectivePatterns(tmp), caps = effectiveCaps(tmp), capsB = effectiveCapsBot(tmp);
+        const g = [0, 1].map(k => buildShell(tmp.shells[k], pats[k], optsFor(tmp, k, Math.max(1.0, S.res * 1.6), caps, capsB)));
         // filled holes count against a candidate: a pattern whose holes all got filled is not a lamp
         const score = g.reduce((n, x) => n + (x.ok && x.stats.holes > 0 ? x.stats.thin + x.stats.small + x.stats.filled + x.stats.dropped : 1000), 0) + (clearanceGap(g[0], g[1]) < S.process.clearance ? 1000 : 0);
         if (score < bestScore) { bestScore = score; best = cand; }
@@ -392,12 +428,17 @@
     }
     UI.lastProfile = S.process.profile;
   }
-  function opts(k, res, caps) { return { res, fillSmall: S.process.fillSmall, minWeb: S.process.minWeb, minHole: S.process.minHole, split: S.process.split, seam: S.process.seam, mirror: k === 1 && S.link.mirror, capPattern: caps[k], capFollow: capFollows(S, k), fdm: S.process.profile === 'FDM' }; }
+  // Split at the light's plane: spheres when the process asks for it, and any outer shell capped at both
+  // ends, because it could not otherwise close around the inner shell.
+  const sepCaps = (st, k) => st.process.capsSeparate && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
+  const needsSplit = (st, k) => (st.shells[k].shape === 'sphere' && st.process.split) || (k === 1 && st.shells[1].cap.on && st.shells[1].capBot.on && !sepCaps(st, 1));
+  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: st.process.capsSeparate, fdm: st.process.profile === 'FDM' }; }
+  function opts(k, res, caps, capsB) { return optsFor(S, k, res, caps, capsB); }
   function build(draft) {
     const res = draft ? Math.min(2.5, S.res * 2) : S.res;
     if (S.fit.auto) fitOuter(S);
-    const pats = effectivePatterns(S), caps = effectiveCaps(S);
-    G = [0, 1].map(k => buildShell(S.shells[k], pats[k], opts(k, res, caps)));
+    const pats = effectivePatterns(S), caps = effectiveCaps(S), capsB = effectiveCapsBot(S);
+    G = [0, 1].map(k => buildShell(S.shells[k], pats[k], opts(k, res, caps, capsB)));
     G.draft = draft;
     crossChecks();
     if (R) { R.setShell(0, G[0]); R.setShell(1, G[1]); }
@@ -414,7 +455,14 @@
       else if (gap < Infinity) notes.push({ bad: false, ok: true, t: `Closest gap between shells: ${num(gap, 0.1)} mm.` });
     }
     if (G[0] && !sourceInside(G[0], S.source)) notes.push({ bad: true, t: 'The emitter pokes through the inner shell or its cap. Shrink it or move it.' });
-    if (S.process.profile === 'FDM' && S.shells.some(sh => sh.cap.on && sh.shape === 'cylinder')) notes.push({ bad: false, t: 'Print capped cylinders cap-down: the flat cap needs no support.' });
+    const stemTop = S.lamp.mount === 'pendant', stemEnd = sh => stemTop ? sh.cap : sh.capBot, endName = stemTop ? 'top' : 'bottom';
+    const inner = S.shells[0], outer = S.shells[1];
+    if (stemEnd(inner).on && !stemEnd(inner).bore) notes.push({ bad: true, t: `The stem can't reach the light: the inner shell's ${endName} cap has no bore. Give it one under Shells, Advanced.` });
+    else if (stemEnd(inner).on && stemEnd(inner).bore < 5.5) notes.push({ bad: false, t: `The inner ${endName} bore (${num(2 * stemEnd(inner).bore, 0.5)} mm across) is too small to pass a 10 mm LED board; the LED would have to be fitted after the stem.` });
+    if (stemEnd(outer).on && !stemEnd(outer).bore) notes.push({ bad: true, t: `The stem can't pass the outer shell: its ${endName} cap has no bore.` });
+    if (outer.cap.on && outer.capBot.on && !sepCaps(S, 1)) notes.push({ bad: false, t: 'The outer shell is capped at both ends, so it exports as two halves split at the light’s plane that close around the inner shell. Exporting caps as separate parts avoids the split and its seam line.' });
+    if (sepCaps(S, 0) || sepCaps(S, 1)) notes.push({ bad: false, t: 'Caps export as separate discs. Assemble the tubes around the light first, then fit the caps onto the tube ends.' });
+    if (S.process.profile === 'FDM' && S.shells.some(sh => (sh.cap.on || sh.capBot.on) && sh.shape === 'cylinder') && !S.process.capsSeparate) notes.push({ bad: false, t: 'Print capped cylinders cap-down: the flat cap needs no support.' });
   }
 
   // ---------- mask strip & checks ----------
@@ -445,7 +493,8 @@
     [0, 1].forEach(k => {
       const x = k * (colW + gap), img = maskImg[k], g = G[k];
       cx.fillStyle = cs.getPropertyValue('--ink-2'); cx.font = '500 13px "Barlow Semi Condensed", system-ui, sans-serif';
-      const title = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped' + (g && g.ok && g.cap ? ': wall, then cap above' : '') + (g && g.ok && g.split ? ', printed as two halves' : '');
+      const parts = g && g.ok ? [g.capB && 'bottom cap', 'wall', g.cap && 'top cap'].filter(Boolean) : [];
+      const title = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped' + (parts.length > 1 ? ': ' + parts.join(', ') + ', bottom to top' : '') + (g && g.ok && g.split ? '; two halves' : '');
       cx.fillText(title, x, 13);
       if (!img) { cx.fillText('Fix the errors on the right to see the pattern.', x, 40); return; }
       const ah = h - lab - 4, sc = Math.min(colW / img.width, ah / img.height);
@@ -566,8 +615,10 @@
       shells: [0, 1].map(k => {
         const sh = S.shells[k], g = G[k], R0 = sh.R, R1 = sh.R + sh.t;
         const end = z => ({ z: +z.toFixed(3), innerDiameter: +(2 * prof(sh, R0, z)).toFixed(3), outerDiameter: +(2 * prof(sh, R1, z)).toFixed(3) });
-        const top = g.cap ? { cap: true, outerPlaneZ: g.zTop, innerPlaneZ: +(g.zTop - sh.t).toFixed(3), hubRadius: sh.cap.hub, outerDiameterAtTop: +(2 * g.rhoC).toFixed(3) } : Object.assign({ cap: false }, end(g.zTop));
-        return { role: k ? 'outer' : 'inner', shape: sh.shape, innerRadius: R0, wall: sh.t, bottomEnd: end(g.zBot), top, splitAtEquator: g.split, seamBand: g.split ? S.process.seam : 0 };
+        const top = g.cap ? { cap: true, outerPlaneZ: g.zTop, innerPlaneZ: +(g.zTop - sh.t).toFixed(3), hubRadius: sh.cap.hub, boreRadius: sh.cap.bore, outerDiameterAtTop: +(2 * g.rhoC).toFixed(3) } : Object.assign({ cap: false }, end(g.zTop));
+        const bottom = g.capB ? { cap: true, outerPlaneZ: g.zBot, innerPlaneZ: +(g.zBot + sh.t).toFixed(3), hubRadius: sh.capBot.hub, boreRadius: sh.capBot.bore, outerDiameterAtBottom: +(2 * g.rhoCB).toFixed(3) } : Object.assign({ cap: false }, end(g.zBot));
+        return { role: k ? 'outer' : 'inner', shape: sh.shape, innerRadius: R0, wall: sh.t, bottom, top, stemFrom: S.lamp.mount === 'pendant' ? 'top' : 'bottom', separateCaps: !!(g.sepT || g.sepB),
+          joints: (g.sepT || g.sepB) ? { topPlaneZ: g.sepT ? +(g.zTop - sh.t).toFixed(3) : null, bottomPlaneZ: g.sepB ? +(g.zBot + sh.t).toFixed(3) : null, ringInnerDiameter: 2 * sh.R, ringOuterDiameter: +(2 * (sh.R + sh.t)).toFixed(3) } : null, splitAtEquator: g.split, seamBand: g.split ? S.process.seam : 0 };
       }),
       closestGap: +gap.toFixed(3), requiredClearance: S.process.clearance,
       twistPeriodDeg: twistPeriods(effectivePatterns(S)[1], S.shells[1].cap.on ? effectiveCaps(S)[1] : null),
@@ -613,7 +664,7 @@
   ps.addEventListener('change', () => {
     const pr = PRESETS[+ps.value], p = pr.make(); S.shells = p.shells; S.link = p.link; S.fit = p.fit; S.plan = p.plan; S.motion.offset = 0; UI.animA = UI.animB = 0;
     if (pr.source) { S.source = JSON.parse(JSON.stringify(pr.source)); R && R.setEmitter(S.source); }
-    if (pr.mount) { S.lamp.mount = pr.mount; S.room.lampZ = MOUNT_Z[pr.mount]; R && R.setRoom(S.room.W, S.room.D, S.room.H); setView(UI.view); }
+    if (pr.mount) { S.lamp.mount = pr.mount; S.room.lampZ = pr.lampZ || MOUNT_Z[pr.mount]; R && R.setRoom(S.room.W, S.room.D, S.room.H); setView(UI.view); }
     UI.undo = null;
     renderSidebar(); build(false); changed('motion'); ps.blur();
   });

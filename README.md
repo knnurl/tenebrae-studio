@@ -23,12 +23,14 @@ Light reaches the room only where both shells are open along the ray from the LE
 **Pattern engine**
 - Five generators: slots and spirals, rings and waves (with bridges), phyllotaxis dots, Voronoi cells, superformula lattice.
 - Linked mode copies the inner pattern to the outer shell with a count detune, and optional mirror.
-- Patterned flat top caps. The cap can continue the wall pattern (spokes line up with slots, dots keep their spacing) or carry its own.
+- Patterned flat caps at the top, the bottom or both. A cap can continue the wall pattern (spokes line up with slots, dots keep their spacing) or carry its own.
+- Stem bores through the caps on the stem side, set by the mount. The inner bore passes the LED board; the outer bore turns on the stem as a plain bearing.
+- An outer shell capped at both ends is split at the light's plane into two halves that close around the inner shell, or, for cylinders, its caps export as separate flat discs instead, with no split.
 - Randomize with per-slider locks and undo. It keeps the first of up to ten variations that passes the print checks.
-- Thirteen presets, grouped into table uplights, other targets and studies.
+- Fourteen presets, grouped into pendants, table uplights, other targets and studies. The studio opens on the mirrored-spiral pendant.
 
 **Room preview**
-- WebGL2 ray test through all four shell faces and both caps, per pixel.
+- WebGL2 ray test through all four shell faces and every cap, per pixel.
 - Emitter models: ideal point, LED die, filament, frosted bulb, facing all round, up or down. Soft shadows refine progressively.
 - Room, wall, ceiling and lamp views, with orbit, pan and zoom. The view re-frames when the lamp or room changes.
 
@@ -84,15 +86,16 @@ The [tutorial](tutorial.html) walks one lamp from the first decision to print fi
 ## Export format
 
 ```
-inner-shell.stl     one watertight part (lower/upper halves for split spheres)
+inner-shell.stl     one watertight part (lower/upper halves when split;
+                    -wall, -top-cap and -bottom-cap when caps are separate)
 outer-shell.stl
 design.json         reopen with Open design
-interface.json      end diameters, cap planes, hub radius, closest gap,
+interface.json      end diameters, cap planes, hub and bore radii, stem side, closest gap,
                     required clearance, twist periods, bookmarks
 checks.txt          triangle counts, watertight results, hole and web counts, notes
 ```
 
-Units are millimetres, with the light centre at the origin and z up. Binary STL runs about 50 MB per million triangles; the default design is about 0.73 M triangles (roughly 36 MB) for both shells at the 0.7 mm grid.
+Units are millimetres, with the light centre at the origin and z up. Binary STL runs about 50 MB per million triangles; the table-uplight preset is about 0.73 M triangles (roughly 36 MB) for both shells at the 0.7 mm grid.
 
 ---
 
@@ -136,15 +139,15 @@ For headless screenshots, `index.html?frames=N` caps soft-shadow refinement at N
 ## Fabrication notes
 
 - **Print coupons first:** flat plates 3 and 4 mm thick with 2–10 mm slot and hole ladders, lit by the real LED. They settle the true blur, which holes survive and how much the material leaks.
-- **Crispness:** keep openings at least 5× the emitter. On the default shells, 20–24 slots give crisp rays with a 1.4 mm die; the default 36 give softer, finer rays.
+- **Crispness:** keep openings at least 5× the emitter. On the table-uplight preset's shells, 20–24 slots give crisp rays with a 1.4 mm die; its 36 slots give softer, finer rays.
 - **Material:** matte black PETG or ASA. PLA softens around 60 °C, and light colours glow.
-- **FDM:** print capped cylinders cap-down; no supports needed. Slots on vertical walls print cleanly. Rings and dots leave overhanging hole tops (no teardrop shaping yet). Split spheres throw a dark ring from the seam band; spheres suit SLS better.
+- **FDM:** print capped cylinders cap-down; no supports needed. With separate caps, print the wall tubes upright and the cap discs flat; the discs sit on the tube ends at the joint planes listed in `interface.json`. Slots on vertical walls print cleanly. Rings and dots leave overhanging hole tops (no teardrop shaping yet). Split spheres throw a dark ring from the seam band; spheres suit SLS better.
 - **Light:** Luminus SST-20 2700K CRI 95 on a 10 mm copper board, on an aluminium stem at the shell centre (±3 mm). Mean Well LDD-700L at 350–700 mA from a certified 24 V adapter, dimmed with its analogue input to avoid PWM flicker on moving shadows.
 - **Twist:** run the outer shell's bottom rim on a printed V-groove race with 6 mm BBs, with felt drag. Put rim ticks at quarters of the twist period shown in the Motion step.
 
 ## Known limits
 
-- Bottom caps aren't built yet, so open bottoms throw a bright disc.
+- Open ends throw bright discs; solid cap hubs leave a dark spot above and below the lamp.
 - The preview shows direct light only; use ambient fill to approximate room bounce.
 - Hole walls aren't drawn in the lamp close-up. The room projection is exact.
 - The wall-to-cap corner has a chamfer of up to one grid cell.

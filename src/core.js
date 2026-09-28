@@ -254,7 +254,8 @@ function makeHash(ctx, pts, spacing) {
 
 // ---------- Shell construction ----------
 // sh: {shape, R, t, zBot, zTop, rimBot, rimTop}; pat: {gen, invert, phase, params}
-// opts: {res, minWeb, minHole, split, seam, mirror}
+// opts: {res, minWeb, minHole, split, seam, mirror, fillSmall, fdm, capPattern, capFollow, capBotPattern, capBotFollow}
+// sh.cap / sh.capBot: {on, hub, bore, ...}: flat patterned end caps; a bore leaves a through-hole for the stem
 function buildShell(sh, pat, opts) {
   const errors = [], warnings = [];
   const sph = sh.shape === 'sphere';
@@ -268,41 +269,59 @@ function buildShell(sh, pat, opts) {
   }
   if (zTop - zBot < 20) errors.push('Shell needs at least 20 mm of height.');
 
-  const cap = !!(sh.cap && sh.cap.on);
+  const cap = !!(sh.cap && sh.cap.on), capB = !!(sh.capBot && sh.capBot.on);
+  const boreT = cap ? Math.max(0, sh.cap.bore || 0) : 0, boreB = capB ? Math.max(0, sh.capBot.bore || 0) : 0;
+  if (cap && zTop - t < 10) errors.push('A top cap needs the top at least 10 mm plus the wall above the light.');
+  if (capB && zBot + t > -10) errors.push('A bottom cap needs the bottom at least 10 mm plus the wall below the light.');
   if (cap && zTop - t <= zBot + 10) errors.push('A capped shell needs at least 10 mm between the bottom opening and the cap.');
-  // Outer corner, where the outer wall meets the top plane (only used when capped).
+  // Corners, where the outer wall meets the top and bottom planes (used when capped).
   const sC = sph ? Ro * Math.asin(Math.min(0.999, zTop / Ro)) : zTop;
   const rhoC = sph ? Math.sqrt(Math.max(0, Ro * Ro - zTop * zTop)) : Ro;
-  const onCap = s => cap && s > sC;
-  const psiOfS = s => onCap(s) ? Math.atan2(zTop, rhoC - (s - sC)) : (sph ? s / Ro : Math.atan(s / Ro));
+  const sCB = sph ? Ro * Math.asin(Math.max(-0.999, zBot / Ro)) : zBot;
+  const rhoCB = sph ? Math.sqrt(Math.max(0, Ro * Ro - zBot * zBot)) : Ro;
+  const onCap = s => cap && s > sC, onCapB = s => capB && s < sCB;
+  const psiOfS = s => onCap(s) ? Math.atan2(zTop, rhoC - (s - sC)) : onCapB(s) ? Math.atan2(zBot, rhoCB - (sCB - s)) : (sph ? s / Ro : Math.atan(s / Ro));
   const pt = (face, s) => {
     const Rs = face ? Ro : R, psi = psiOfS(s);
     let r = sph ? Rs * Math.cos(psi) : Rs, z = sph ? Rs * Math.sin(psi) : Rs * Math.tan(psi);
     if (cap) { const zc = face ? zTop : zTop - t; if (z > zc) { r = zc / Math.tan(psi); z = zc; } }
+    if (capB) { const zc = face ? zBot : zBot + t; if (z < zc) { r = zc / Math.tan(psi); z = zc; } }
     return [r, z];
   };
   const prof = (Rs, z) => sph ? Math.sqrt(Math.max(0, Rs * Rs - z * z)) : Rs;
-  const rhoAt = s => onCap(s) ? rhoC - (s - sC) : (sph ? Ro * Math.cos(s / Ro) : Ro);
+  const rhoAt = s => onCap(s) ? rhoC - (s - sC) : onCapB(s) ? rhoCB - (sCB - s) : (sph ? Ro * Math.cos(s / Ro) : Ro);
 
-  // Pattern band on the outer face (arc length s). Capped shells run on round the corner to the hub.
-  let sLo, sHi, sEndBot, sEndTop, sWallHi, sCapLo = Infinity;
-  if (sph) { sEndBot = Ro * Math.asin(zBot / Ro); sLo = Math.max(sEndBot + sh.rimBot, Ro * Math.asin(Math.max(-0.999, zBot / R)) + 0.3); }
-  else { sEndBot = zBot; sLo = Math.max(zBot + sh.rimBot, zBot * Ro / R + 0.3); }
+  // Pattern band on the outer face (arc length s). Capped ends run on round their corner to the hub.
+  let sLo, sHi, sEndBot, sEndTop, sWallLo, sWallHi, sCapLo = Infinity, sCapBHi = -Infinity;
+  const hubT = cap ? Math.max(1, sh.cap.hub) : 0, hubB = capB ? Math.max(1, sh.capBot.hub) : 0;
+  if (capB) {
+    sLo = sCB - (rhoCB - hubB); sWallLo = sCB + sh.rimBot / 2; sCapBHi = sCB - sh.rimBot / 2;
+    if (sCapBHi - sLo < 6 * res) errors.push('The bottom hub and corner band leave no room for the bottom cap pattern. Shrink the hub or the corner band.');
+    if (boreB > 0 && boreB > hubB - opts.minWeb) errors.push(`The bottom bore must be at least ${opts.minWeb} mm smaller than the bottom hub.`);
+  } else {
+    if (sph) { sEndBot = Ro * Math.asin(zBot / Ro); sLo = Math.max(sEndBot + sh.rimBot, Ro * Math.asin(Math.max(-0.999, zBot / R)) + 0.3); }
+    else { sEndBot = zBot; sLo = Math.max(zBot + sh.rimBot, zBot * Ro / R + 0.3); }
+    sWallLo = sLo;
+  }
   if (cap) {
-    const hub = Math.max(1, sh.cap.hub);
-    sHi = sC + rhoC - hub; sWallHi = sC - sh.rimTop / 2; sCapLo = sC + sh.rimTop / 2;
-    if (sWallHi - sLo < 6 * res) errors.push('Rims leave no room for the wall pattern. Reduce rim height or increase shell height.');
+    sHi = sC + rhoC - hubT; sWallHi = sC - sh.rimTop / 2; sCapLo = sC + sh.rimTop / 2;
     if (sHi - sCapLo < 6 * res) errors.push('The cap hub and corner band leave no room for the cap pattern. Shrink the hub or the corner band.');
-    if (sph && opts.fdm) warnings.push('A flat cap on a sphere needs supports on FDM. Print it on SLS, or use a cylinder.');
+    if (boreT > 0 && boreT > hubT - opts.minWeb) errors.push(`The top bore must be at least ${opts.minWeb} mm smaller than the top hub.`);
   } else {
     sEndTop = sph ? Ro * Math.asin(zTop / Ro) : zTop;
     sHi = sph ? Math.min(sEndTop - sh.rimTop, Ro * Math.asin(Math.min(0.999, zTop / R)) - 0.3) : Math.min(zTop - sh.rimTop, zTop * Ro / R - 0.3);
     sWallHi = sHi;
-    if (sHi - sLo < 6 * res) errors.push('Rims leave no room for the pattern. Reduce rim height or increase shell height.');
   }
+  // Separate caps (cylinders): the cap is a flat disc on the tube's end, so the wall pattern stops at least
+  // one minimum web short of each joint plane, leaving a solid ring to join to.
+  const sepT = !!(opts.capsSeparate && !sph && cap), sepB = !!(opts.capsSeparate && !sph && capB);
+  if (sepT) sWallHi = Math.min(sWallHi, zTop - t - Math.max(opts.minWeb, sh.rimTop / 2));
+  if (sepB) sWallLo = Math.max(sWallLo, zBot + t + Math.max(opts.minWeb, sh.rimBot / 2));
+  if (sWallHi - sWallLo < 6 * res) errors.push('Rims leave no room for the wall pattern. Reduce rim height or increase shell height.');
+  if ((cap || capB) && sph && opts.fdm) warnings.push('A flat cap on a sphere needs supports on FDM. Print it on SLS, or use a cylinder.');
   if (sh.rimBot < opts.minWeb || sh.rimTop < opts.minWeb) warnings.push(`A rim is narrower than the ${opts.minWeb} mm minimum web.`);
 
-  const G = { sph, R, t, Ro, zBot, zTop, sLo, sHi, cap, sC, rhoC, errors, warnings, psiOfS, pt, rhoAt };
+  const G = { sph, R, t, Ro, zBot, zTop, sLo, sHi, cap, sC, rhoC, capB, sCB, rhoCB, boreT, boreB, errors, warnings, psiOfS, pt, rhoAt };
   if (errors.length) { G.ok = false; return G; }
 
   // Band rows (include s = 0 exactly when the band crosses it, so a seam can sit there).
@@ -317,68 +336,96 @@ function buildShell(sh, pat, opts) {
   const psi = new Float64Array(Nb), rho = new Float64Array(Nb), dsd = new Float64Array(Nb);
   for (let j = 0; j < Nb; j++) {
     psi[j] = psiOfS(bandS[j]); rho[j] = rhoAt(bandS[j]);
-    dsd[j] = onCap(bandS[j]) ? zTop / (Math.sin(psi[j]) ** 2) : sph ? Ro : Ro / (Math.cos(psi[j]) ** 2);
+    dsd[j] = onCap(bandS[j]) ? zTop / (Math.sin(psi[j]) ** 2) : onCapB(bandS[j]) ? -zBot / (Math.sin(psi[j]) ** 2) : sph ? Ro : Ro / (Math.cos(psi[j]) ** 2);
   }
 
-  // Full profile rows: bottom rim, band, top rim. Rim rows blend to flat end planes.
+  // Full profile rows. Open ends blend to flat end planes; bored caps blend to a cylindrical bore.
   const rows = [];
   const b0 = pt(0, sLo), b0o = pt(1, sLo), bL = pt(0, sHi), bLo = pt(1, sHi);
-  const nbR = Math.max(1, Math.ceil((sLo - sEndBot) / 2)), ntR = cap ? 0 : Math.max(1, Math.ceil((sEndTop - sHi) / 2));
-  for (let k = 0; k < nbR; k++) {
-    const f = k / nbR, zi = zBot + f * (b0[1] - zBot), zo = zBot + f * (b0o[1] - zBot);
-    rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+  if (capB) {
+    if (boreB > 0) {
+      const nb = Math.max(1, Math.ceil((hubB - boreB) / 2));
+      for (let k = 0; k < nb; k++) { const f = k / nb; rows.push({ band: -1, ri: boreB + f * (b0[0] - boreB), zi: zBot + t, ro: boreB + f * (b0o[0] - boreB), zo: zBot }); }
+    }
+  } else {
+    const nbR = Math.max(1, Math.ceil((sLo - sEndBot) / 2));
+    for (let k = 0; k < nbR; k++) {
+      const f = k / nbR, zi = zBot + f * (b0[1] - zBot), zo = zBot + f * (b0o[1] - zBot);
+      rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+    }
   }
   const bandRowStart = rows.length;
   for (let j = 0; j < Nb; j++) {
     const a = pt(0, bandS[j]), b = pt(1, bandS[j]);
     rows.push({ band: j, s: bandS[j], ri: a[0], zi: a[1], ro: b[0], zo: b[1] });
   }
-  for (let k = 1; k <= ntR; k++) {
-    const f = k / ntR, zi = bL[1] + f * (zTop - bL[1]), zo = bLo[1] + f * (zTop - bLo[1]);
-    rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+  if (cap) {
+    if (boreT > 0) {
+      const nt = Math.max(1, Math.ceil((hubT - boreT) / 2));
+      for (let k = 1; k <= nt; k++) { const f = k / nt; rows.push({ band: -1, ri: bL[0] + f * (boreT - bL[0]), zi: zTop - t, ro: bLo[0] + f * (boreT - bLo[0]), zo: zTop }); }
+    }
+  } else {
+    const ntR = Math.max(1, Math.ceil((sEndTop - sHi) / 2));
+    for (let k = 1; k <= ntR; k++) {
+      const f = k / ntR, zi = bL[1] + f * (zTop - bL[1]), zo = bLo[1] + f * (zTop - bLo[1]);
+      rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+    }
   }
 
-  // Evaluate the pattern field: wall zone, and cap zone when capped.
+  // Evaluate the pattern field: wall zone, plus a zone for each capped end.
   const zone = (lo, hi, extra) => Object.assign({ sph, Ro, sLo: lo, sHi: hi, bandS, psi, rho, dsd, rhoAt }, extra || {});
   const prep = (p, ctx) => {
     const f = (GENS[p.gen] || GENS.slots).prepare(ctx, p.params);
     const sign = p.invert ? -1 : 1, ph = (p.phase || 0) * DEG;
     return (phi, j) => sign * f(phi - ph, j);
   };
-  const fWall = prep(pat, zone(sLo, sWallHi));
-  let capPat = opts.capPattern;
-  if (cap && capPat && opts.capFollow) { // same pattern as the wall: keep dot spacing and row pitch, not raw counts
-    let aW = 0, aC = 0;
-    for (let j = 0; j < Nb - 1; j++) { const a = rho[j] * (bandS[j + 1] - bandS[j]); if (bandS[j] < sWallHi) aW += a; else if (bandS[j] >= sCapLo) aC += a; }
-    const g = GENS[capPat.gen], p = Object.assign({}, capPat.params), def = k => g.params.find(q => q.k === k);
-    if (!g.azimuthal) p[g.count] = Math.max(def(g.count).min, Math.round(p[g.count] * aC / Math.max(aW, 1)));
-    if (capPat.gen === 'superformula') p.rows = Math.max(1, Math.round(p.rows * (sHi - sCapLo) / Math.max(sWallHi - sLo, 1)));
-    capPat = Object.assign({}, capPat, { params: p });
+  const fWall = prep(pat, zone(sWallLo, sWallHi));
+  let aW = 0, aT = 0, aB = 0;
+  for (let j = 0; j < Nb - 1; j++) {
+    const a = rho[j] * (bandS[j + 1] - bandS[j]), s = bandS[j];
+    if (s >= sWallLo && s < sWallHi) aW += a; else if (s >= sCapLo) aT += a; else if (s <= sCapBHi) aB += a;
   }
+  // A cap that follows the wall keeps its dot spacing and row pitch, not raw counts.
+  const follow = (cp, area, len) => {
+    const g = GENS[cp.gen], p = Object.assign({}, cp.params), def = k => g.params.find(q => q.k === k);
+    if (!g.azimuthal) p[g.count] = Math.max(def(g.count).min, Math.round(p[g.count] * area / Math.max(aW, 1)));
+    if (cp.gen === 'superformula') p.rows = Math.max(1, Math.round(p.rows * len / Math.max(sWallHi - sWallLo, 1)));
+    return Object.assign({}, cp, { params: p });
+  };
+  let capPat = opts.capPattern, capBPat = opts.capBotPattern;
+  if (cap && capPat && opts.capFollow) capPat = follow(capPat, aT, sHi - sCapLo);
+  if (capB && capBPat && opts.capBotFollow) capBPat = follow(capBPat, aB, sCapBHi - sLo);
   const fCap = cap && capPat ? prep(capPat, zone(sCapLo, sHi, {
     W: s => (rhoC * rhoC - (rhoC - (s - sC)) ** 2) / 2,
     Wi: w => sC + rhoC - Math.sqrt(Math.max(0, rhoC * rhoC - 2 * w)),
     areaK: TAU,
   })) : null;
+  const fCapB = capB && capBPat ? prep(capBPat, zone(sLo, sCapBHi, {
+    W: s => (rhoCB - (sCB - s)) ** 2 / 2,
+    Wi: w => sCB - rhoCB + Math.sqrt(Math.max(0, 2 * w)),
+    areaK: TAU,
+  })) : null;
   const field = new Float32Array(Nb * Nc);
   const mir = opts.mirror ? -1 : 1;
-  const split = !!(sph && opts.split && sMid === 0 && n2 > 0);
+  const split = !!(opts.split && !(sepT || sepB) && sMid === 0 && n2 > 0);
   const forced = new Uint8Array(Nb);
   forced[0] = 1; forced[Nb - 1] = 1;
   if (split) for (let j = 0; j < Nb; j++) if (Math.abs(bandS[j]) <= Math.max(opts.seam / 2, 0)) forced[j] = 1;
   if (split) forced[n1] = 1;
-  if (cap) {
+  const corner = (lo, hi, sc) => {
     let jc = 0;
     for (let j = 0; j < Nb; j++) {
-      if (bandS[j] > sWallHi && bandS[j] < sCapLo) forced[j] = 1;
-      if (Math.abs(bandS[j] - sC) < Math.abs(bandS[jc] - sC)) jc = j;
+      if (bandS[j] > lo && bandS[j] < hi) forced[j] = 1;
+      if (Math.abs(bandS[j] - sc) < Math.abs(bandS[jc] - sc)) jc = j;
     }
     forced[jc] = 1;
-  }
+  };
+  if (cap) corner(sWallHi, sCapLo, sC);
+  if (capB) corner(sCapBHi, sWallLo, sCB);
   for (let j = 0; j < Nb; j++) {
     const o = j * Nc;
     if (forced[j]) { field.fill(FORCE, o, o + Nc); continue; }
-    const f = fCap && bandS[j] >= sCapLo ? fCap : fWall;
+    const f = fCap && bandS[j] >= sCapLo ? fCap : fCapB && bandS[j] <= sCapBHi ? fCapB : fWall;
     for (let i = 0; i < Nc; i++) {
       let v = f(mir * (i * TAU / Nc), j);
       if (!(v === v)) v = FORCE;             // NaN guard
@@ -458,16 +505,44 @@ function buildShell(sh, pat, opts) {
   // Mesh parts (split spheres at the equator seam).
   const last = rows.length - 1;
   const parts = [];
-  if (split) {
+  const endB = capB && !boreB ? 0 : 1, endT = cap && !boreT ? 0 : 1; // open ends: uncapped, or capped with a bore
+  if (sepT || sepB) {
+    const onPlane = (s, zc) => Math.abs(pt(0, s)[1] - zc) < 1e-6;
+    let jLo = 0, jHi = Nb - 1, jC = -1, jCb = -1;
+    if (sepT) {
+      jHi = -1; for (let j = 0; j < Nb; j++) if (forced[j] && bandS[j] > sWallHi && bandS[j] <= zTop - t + 1e-9) jHi = j;
+      for (let j = Nb - 1; j >= 0; j--) if (forced[j] && bandS[j] > sC && bandS[j] < sCapLo + 1e-9 && onPlane(bandS[j], zTop - t)) jC = j;
+      if (jHi < 0 || jC < 0) errors.push('Widen the top corner band to export the cap separately.');
+    }
+    if (sepB) {
+      jLo = -1; for (let j = Nb - 1; j >= 0; j--) if (forced[j] && bandS[j] < sWallLo && bandS[j] >= zBot + t - 1e-9) jLo = j;
+      for (let j = 0; j < Nb; j++) if (forced[j] && bandS[j] < sCB && bandS[j] > sCapBHi - 1e-9 && onPlane(bandS[j], zBot + t)) jCb = j;
+      if (jLo < 0 || jCb < 0) errors.push('Widen the bottom corner band to export the cap separately.');
+    }
+    if (!errors.length) {
+      const band = (a, b) => rows.slice(bandRowStart + a, bandRowStart + b + 1);
+      const pre = rows.slice(0, bandRowStart), post = rows.slice(bandRowStart + Nb);
+      const ring = (ri, zi, ro, zo) => ({ band: -1, ri, zi, ro, zo });
+      let hW = 0, hT = 0, hB = 0;
+      for (let q = 0; q < voidLab.count; q++) {
+        const lo = holeRows[2 * q], hi = holeRows[2 * q + 1];
+        if (sepT && lo >= jC) hT++; else if (sepB && hi <= jCb) hB++; else hW++;
+      }
+      const wallRows = [...(sepB ? [ring(R, zBot + t, Ro, zBot + t)] : pre), ...band(jLo, jHi), ...(sepT ? [ring(R, zTop - t, Ro, zTop - t)] : post)];
+      parts.push({ suffix: 'wall', rows: wallRows, j0: 0, j1: wallRows.length - 1, holes: hW, ends: 2, fanTop: false, fanBottom: false });
+      if (sepT) { const r = [ring(Ro, zTop - t, Ro, zTop), ...band(jC, Nb - 1), ...post]; parts.push({ suffix: 'top-cap', rows: r, j0: 0, j1: r.length - 1, holes: hT, ends: boreT ? 2 : 1, fanTop: !boreT, fanBottom: false }); }
+      if (sepB) { const r = [...pre, ...band(0, jCb), ring(Ro, zBot + t, Ro, zBot)]; parts.push({ suffix: 'bottom-cap', rows: r, j0: 0, j1: r.length - 1, holes: hB, ends: boreB ? 2 : 1, fanTop: false, fanBottom: !boreB }); }
+    }
+  } else if (split) {
     const seamRow = bandRowStart + n1;
     let lo = 0, hi = 0;
     for (let c = 0; c < voidLab.count; c++) { if (holeRows[2 * c + 1] < n1) lo++; else hi++; }
-    parts.push({ suffix: 'lower', j0: 0, j1: seamRow, holes: lo, ends: 2 });
-    parts.push({ suffix: 'upper', j0: seamRow, j1: last, holes: hi, ends: cap ? 1 : 2 });
-  } else parts.push({ suffix: '', j0: 0, j1: last, holes: voidLab.count, ends: cap ? 1 : 2 });
+    parts.push({ suffix: 'lower', j0: 0, j1: seamRow, holes: lo, ends: endB + 1 });
+    parts.push({ suffix: 'upper', j0: seamRow, j1: last, holes: hi, ends: 1 + endT });
+  } else parts.push({ suffix: '', j0: 0, j1: last, holes: voidLab.count, ends: endB + endT });
 
   Object.assign(G, {
-    ok: errors.length === 0, sMid, n1, n2, Nb, Nc, sWallHi, sCapLo, capHub: cap ? sh.cap.hub : 0, bandS, rows, bandRowStart, field, flags, tex, forced, split, parts,
+    ok: errors.length === 0, sepT, sepB, sMid, n1, n2, Nb, Nc, sWallLo, sWallHi, sCapLo, sCapBHi, capHub: hubT, capBHub: hubB, bandS, rows, bandRowStart, field, flags, tex, forced, split, parts,
     stats: { holes: voidLab.count, dropped, thin, small, filled, connected, open: openA / totA,
       estTris: estimateTris(rows.length, Nc, openA / totA) },
   });
@@ -530,8 +605,9 @@ function labelComponents(Nb, Nc, pred, eight) {
 
 // ---------- Mesh (filled marching squares, walls cut along rays from the source) ----------
 function buildMesh(G, part) {
-  const { rows, Nc, field } = G, nR = rows.length, j0 = part.j0, j1 = part.j1;
-  const capTop = G.cap && j1 === nR - 1;
+  const { Nc, field } = G, rows = part.rows || G.rows, nR = rows.length, j0 = part.j0, j1 = part.j1;
+  const capTop = part.fanTop !== undefined ? part.fanTop : (G.cap && !G.boreT && j1 === nR - 1);
+  const capBottom = part.fanBottom !== undefined ? part.fanBottom : (G.capB && !G.boreB && j0 === 0);
   const pos = [], idx = [];
   const gI = new Int32Array(nR * Nc * 2).fill(-1), hI = new Int32Array(nR * Nc * 2).fill(-1), vI = new Int32Array(nR * Nc * 2).fill(-1);
   const dphi = TAU / Nc;
@@ -567,9 +643,17 @@ function buildMesh(G, part) {
       for (let k = 0; k < n; k++) {
         const a = P[k], b = P[(k + 1) % n];
         if (a.x && b.x) quad(a.v, b.v);
-        else if (j === j0 && a.c === 0 && b.c === 1) quad(a.v, b.v);
+        else if (j === j0 && !capBottom && a.c === 0 && b.c === 1) quad(a.v, b.v);
         else if (j + 1 === j1 && !capTop && a.c === 2 && b.c === 3) quad(a.v, b.v);
       }
+    }
+  }
+  if (capBottom) { // bottom hub disc
+    const w = rows[j0], cIn = add(0, w.zi, 0), cOut = add(0, w.zo, 0);
+    for (let i = 0; i < Nc; i++) {
+      const i1 = (i + 1) % Nc;
+      tri(cOut, grid(i1, j0, 1), grid(i, j0, 1));
+      tri(cIn, grid(i, j0, 0), grid(i1, j0, 0));
     }
   }
   if (capTop) { // hub disc: fan each face to its centre point
@@ -648,15 +732,15 @@ function zipStore(files) { // files: [{name, data: Uint8Array}]
 }
 
 // ---------- Cross-shell checks ----------
-function clearanceGap(GA, GB) { // min radial gap between A's outer face and B's inner face where both exist
+function clearanceGap(GA, GB) { // closest gap from A's outer surface to B's inner surface: wall, top cap, bottom cap
   let gap = Infinity;
   if (!GA.ok || !GB.ok) return gap;
   const profB = z => GB.sph ? Math.sqrt(Math.max(0, GB.R * GB.R - z * z)) : GB.R;
-  const zcB = GB.cap ? GB.zTop - GB.t : Infinity;
+  const zcT = GB.cap ? GB.zTop - GB.t : Infinity, zcB = GB.capB ? GB.zBot + GB.t : -Infinity;
   for (const r of GA.rows) {
-    if (r.zo < GB.zBot) continue;
-    if (GB.cap) gap = Math.min(gap, zcB - r.zo);
-    if (r.zo > Math.min(GB.zTop, zcB)) continue;
+    if (GB.cap) gap = Math.min(gap, zcT - r.zo);
+    if (GB.capB) gap = Math.min(gap, r.zo - zcB);
+    if (r.zo < Math.max(GB.zBot, zcB) || r.zo > Math.min(GB.zTop, zcT)) continue;
     gap = Math.min(gap, profB(r.zo) - r.ro);
   }
   return gap;
@@ -672,6 +756,7 @@ function sourceInside(G, src) {
   for (const [r, z] of pts) {
     if (G.sph ? Math.hypot(r, z) >= G.R - 0.5 : r >= G.R - 0.5) return false;
     if (G.cap && z >= G.zTop - G.t - 0.5) return false;
+    if (G.capB && z <= G.zBot + G.t + 0.5) return false;
   }
   return true;
 }

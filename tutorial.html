@@ -157,7 +157,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
 
     <section id="first-lamp">
       <h2>Your first lamp</h2>
-      <p class="lede">Start from the default design: a table uplight with two capped cylinders, 36 and 39 slots, and an upward-facing LED die. Each step below matches a numbered step in the studio's sidebar. Stay in <span class="ui">Basic</span> until step 8.</p>
+      <p class="lede">The studio opens on a mirrored-spiral pendant. For this walkthrough, choose <span class="ui">Table uplight, auto-fitted</span> from <span class="ui">Load a preset</span> instead: two capped cylinders, 36 and 39 slots, and an upward-facing LED die. Each step below matches a numbered step in the studio's sidebar. Stay in <span class="ui">Basic</span> until step 8.</p>
 
       <div class="side-fig">
         <img src="docs/img/sidebar.jpg" alt="Studio sidebar in Basic mode with steps Lamp, Target and Light open">
@@ -167,7 +167,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
       <section class="step" id="step-1">
         <h3><i class="num">1</i>Lamp</h3>
         <p>Choose <span class="ui">Table lamp</span> or <span class="ui">Pendant</span>.</p>
-        <p class="sets">Sets the light height, 900 mm for a table lamp and 1900 mm for a pendant, and re-frames the camera.</p>
+        <p class="sets">Sets the light height, 900 mm for a table lamp and 1900 mm for a pendant, and re-frames the camera. It also decides where the stem enters, from below on a table lamp and from above on a pendant, so capped ends on that side get stem bores.</p>
       </section>
 
       <section class="step" id="step-2">
@@ -176,8 +176,8 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
         <ul class="pick">
           <li><strong>Ceiling and upper walls:</strong> upward LED die, top caps on. The v1 lamp.</li>
           <li><strong>Walls at lamp height:</strong> vertical filament, caps off. Vertical slots stay sharp; horizontal features blur.</li>
-          <li><strong>Floor and lower walls:</strong> downward die. Bottom caps don't exist yet, so the floor gets a bright disc.</li>
-          <li><strong>Everywhere:</strong> two dies back to back, with a dim band at lamp height.</li>
+          <li><strong>Floor and lower walls:</strong> downward die, bottom caps on.</li>
+          <li><strong>Everywhere:</strong> all-round light and both ends capped, so the ceiling and floor carry the pattern too.</li>
         </ul>
         <p class="sets">Changing the target tells you exactly what it switched, in a message at the bottom of the screen.</p>
       </section>
@@ -190,7 +190,9 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
 
       <section class="step" id="step-4">
         <h3><i class="num">4</i>Shells</h3>
-        <p>Set the inner shell's <span class="ui">Shape</span>, <span class="ui">Radius</span>, how far its top sits <span class="ui">above the light</span> and its bottom <span class="ui">below the light</span>, and whether it has <span class="ui">Top caps</span>.</p>
+        <p>Set the inner shell's <span class="ui">Shape</span>, <span class="ui">Radius</span>, how far its top sits <span class="ui">above the light</span> and its bottom <span class="ui">below the light</span>, and whether it has <span class="ui">Top caps</span> and <span class="ui">Bottom caps</span>.</p>
+        <p>Capped ends need a way in for the stem. On the stem side, the inner cap gets a 6 mm-radius bore that the 10 mm LED board fits through, and the outer cap a 4.5 mm bore that turns on an 8 mm stem as a plain bearing. Bores are under <span class="ui">Advanced</span>.</p>
+        <p>Two shells both closed at both ends can't nest, so an outer shell capped at both ends exports as two halves split at the light's plane. They close around the inner shell; the joint is a flat ring, and its solid seam band throws a thin dark line at lamp height.</p>
         <p>Leave <span class="ui">Fit outer shell automatically</span> on. The outer shell then follows the inner one with a single gap, around the wall and above the cap. 9 mm is a good start: close enough that both shells stay sharp, wide enough to print and assemble.</p>
         <p class="sets">Cylinders suit FDM. Spheres print cleanly only on SLS: split for FDM, their seam band throws a dark ring, and a capped sphere needs supports.</p>
       </section>
@@ -198,7 +200,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
       <section class="step" id="step-5">
         <h3><i class="num">5</i>Pattern</h3>
         <p>Choose a generator and tune its two to four sliders: slots and spirals, rings and waves, phyllotaxis dots, Voronoi cells, or a superformula lattice.</p>
-        <p>For crisp rays on the default shells, use 20 to 24 slots. That gives openings of 6 to 7.5 mm, at least 4.5 times the die. The default 36 slots give softer, finer rays.</p>
+        <p>For crisp rays on the uplight's shells, use 20 to 24 slots. That gives openings of 6 to 7.5 mm, at least 4.5 times the die. The preset's 36 slots give softer, finer rays.</p>
         <p>Keep <span class="ui">Cap follows wall pattern</span> on: slots carry on as spokes across the cap, and the whole shell repeats at one twist period, which suits a hand-twisted lamp.</p>
         <p class="sets"><span class="ui">Randomize</span> lives here too. See <a href="#explore">Explore variations</a>.</p>
       </section>
@@ -218,6 +220,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
       <section class="step" id="step-8">
         <h3><i class="num">8</i>Make</h3>
         <p>Choose <span class="ui">FDM</span> or <span class="ui">SLS / MJF</span>; this sets the minimum web, minimum hole and clearance. The line under it says whether the design is ready. When it is, use <span class="ui">Export print files</span> in the header.</p>
+        <p>For capped cylinders, <span class="ui">Export caps as separate parts</span> exports each shell as a wall tube plus flat cap discs, one wall thick, that sit on the tube ends. Both print without support, and the outer shell no longer needs a seam split: slide the tubes over the light, then fit the caps.</p>
         <p class="sets">In <span class="ui">Advanced</span> you can change the minimums, the shell clearance, filling of undersized holes, sphere splitting and the grid resolution. A coarser grid gives smaller files.</p>
       </section>
 
@@ -246,7 +249,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
     <section id="checks">
       <h2>Read the checks</h2>
       <p>Under the preview, each shell is unwrapped flat: the wall at the bottom, the cap above the solid corner band. Colours mark what the fabrication checks changed or found.</p>
-      <figure><img src="docs/img/strip.jpg" alt="Unwrapped masks of both shells and the checks table"><figcaption>Unwrapped masks and the checks table for the default design.</figcaption></figure>
+      <figure><img src="docs/img/strip.jpg" alt="Unwrapped masks of both shells and the checks table"><figcaption>Unwrapped masks and the checks table for the table uplight.</figcaption></figure>
       <div class="table-wrap"><table>
         <thead><tr><th scope="col">Row or colour</th><th scope="col">What it means</th><th scope="col">What to do</th></tr></thead>
         <tbody>
@@ -265,7 +268,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
       <ol class="plain">
         <li><strong>Print coupons first.</strong> Flat plates 3 and 4 mm thick, with slot and hole ladders from 2 to 10 mm. Shine the real LED through them onto a wall. You'll learn the true blur, which holes FDM keeps open, and how much light the material leaks.</li>
         <li><strong>Use matte black PETG or ASA.</strong> PLA softens around 60 °C, and light-coloured material glows, which washes out contrast.</li>
-        <li><strong>Print capped cylinders cap-down.</strong> The cap sits flat on the bed and needs no support. Slots on vertical walls print cleanly; rings and dots leave overhanging hole tops, because Tenebrae doesn't make teardrop shapes yet.</li>
+        <li><strong>Print capped cylinders cap-down.</strong> The cap sits flat on the bed and needs no support. A shell capped at both ends is a half at a time: each half prints cap-down with its flat seam face up. With separate caps, print the tubes upright and the discs flat. Slots on vertical walls print cleanly; rings and dots leave overhanging hole tops, because Tenebrae doesn't make teardrop shapes yet.</li>
         <li><strong>Mount the light at the centre.</strong> SST-20 on a 10 mm copper board, on an aluminium stem at the shell centre, within ±3 mm. Drive it with a Mean Well LDD-700L at 350 to 700 mA from a certified 24 V adapter, and dim with the driver's analogue input.</li>
         <li><strong>Let the outer shell turn with friction.</strong> Run its bottom rim on a printed V-groove race with 6 mm BBs, plus a felt pad for drag so it stays where you leave it. <code>interface.json</code> has the rim diameters and gaps for designing this in CAD.</li>
       </ol>
@@ -274,10 +277,11 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
     <section id="export">
       <h2>What the export contains</h2>
       <p><span class="ui">Export print files</span> builds the meshes at the full grid resolution, checks each one is watertight, and downloads one zip:</p>
-<pre><code>inner-shell.stl     one watertight part (lower/upper halves for split spheres)
+<pre><code>inner-shell.stl     one watertight part (lower/upper halves when split;
+                    -wall, -top-cap and -bottom-cap when caps are separate)
 outer-shell.stl
 design.json         reopen with Open design
-interface.json      end diameters, cap planes, hub radius, closest gap,
+interface.json      end diameters, cap planes, hub and bore radii, stem side, closest gap,
                     required clearance, twist periods, bookmarks
 checks.txt          triangle counts, watertight results, hole and web counts, notes</code></pre>
       <p>Units are millimetres. The light centre is the origin and z points up. Capped shells export as one cup each, with the wall and cap as a single part.</p>
@@ -286,13 +290,12 @@ checks.txt          triangle counts, watertight results, hole and web counts, no
     <section id="limits">
       <h2>Known limits</h2>
       <ul class="pick">
-        <li>Open ends throw bright discs. Top caps fix the ceiling; bottom caps aren't built yet.</li>
+        <li>Open ends throw bright discs; cap them to carry the pattern instead. Solid cap hubs leave a dark spot directly above and below.</li>
         <li>The preview shows direct light only. A real room adds bounce light, so raise <span class="ui">Ambient fill</span> to judge contrast.</li>
         <li>The emitter lights all directions equally unless you set it to upward or downward.</li>
         <li>Hole walls aren't drawn in the lamp close-up; the room projection is exact.</li>
         <li>Where the wall meets a cap, the top edge has a chamfer of up to one grid cell (0.7 mm by default).</li>
-        <li>The solid cap hub leaves a dark spot directly above the lamp.</li>
-      </ul>
+              </ul>
     </section>
 
     <section id="keys">
