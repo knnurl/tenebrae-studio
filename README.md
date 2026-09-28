@@ -2,6 +2,8 @@
 
 A single-file browser studio for designing **two-shell perforated shadow lamps**: nested cylinders or spheres, turning around one LED, that project moiré patterns onto the ceiling and walls. It exports watertight STLs ready to print.
 
+*Tenebrae* is Latin for "darkness" or "shadows". It is also the name of a Holy Week service in which candles are put out one by one until the church is dark. These lamps work the same way: the pattern you see is made by the light the shells block.
+
 **[Open the studio](https://knnurl.github.io/tenebrae-studio/)**
 
 **[Read the tutorial](https://knnurl.github.io/tenebrae-studio/tutorial.html)**
