@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tenebrae tutorial: design a two-shell shadow lamp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceef1;--panel:#f6f7f8;--ink:#23272e;--ink-2:#5b626c;--rule:#d3d7dc;--lumen:#d98a1c;--lumen-ink:#7a4a05;--on-lumen:#1d1605;--code:#e3e6ea;--shade:#07080a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f2329;--panel:#262b32;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--code:#2d333b}}
+:root[data-theme="dark"]{--bg:#1f2329;--panel:#262b32;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--code:#2d333b}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(16px + env(safe-area-inset-top,0px));scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+h1,h2,h3,.toc,.btn,figcaption,th{font-family:"Barlow Semi Condensed",Barlow,system-ui,sans-serif}
+a{color:var(--lumen-ink);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--lumen);outline-offset:3px}
+img{max-width:100%;display:block}
+
+.hero{position:relative;background:var(--shade);color:#eef0f3;min-height:min(78vh,720px);display:grid;align-items:end;overflow:hidden}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:60% 40%}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(to top right,rgba(7,8,10,.94) 0%,rgba(7,8,10,.7) 38%,rgba(7,8,10,0) 70%)}
+.hero-text{position:relative;z-index:1;max-width:1180px;width:100%;margin:0 auto;padding:48px 28px 56px}
+.hero h1{font-size:clamp(40px,6.2vw,72px);line-height:1.02;font-weight:600;margin:0 0 18px;max-width:14ch;letter-spacing:-.005em}
+.hero p{font-size:19px;max-width:52ch;margin:0 0 26px;color:#c9ced5}
+.btn{display:inline-block;background:var(--lumen);color:var(--on-lumen);font-weight:600;font-size:18px;padding:10px 20px;border-radius:6px;text-decoration:none}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:none;color:#eef0f3;border:1px solid rgba(255,255,255,.35);margin-left:10px}
+
+.layout{max-width:1180px;margin:0 auto;padding:40px 28px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:56px}
+.toc{position:sticky;top:24px;align-self:start;font-size:15.5px}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.toc a{color:var(--ink-2);text-decoration:none;display:block;padding:3px 0 3px 12px;border-left:2px solid var(--rule)}
+.toc a:hover{color:var(--ink);border-left-color:var(--ink-2)}
+.toc a.on{color:var(--ink);border-left-color:var(--lumen)}
+.doc{max-width:720px}
+.doc > section{margin-bottom:64px}
+h2{font-size:34px;line-height:1.15;font-weight:600;margin:0 0 14px}
+h3{font-size:23px;font-weight:600;margin:0 0 6px;display:flex;align-items:center;gap:12px}
+.lede{font-size:19px;color:var(--ink-2);margin-top:0}
+p{margin:0 0 14px}
+.rules{display:grid;gap:22px;margin:24px 0 0}
+.rule h3{font-size:21px}
+.diagram{margin:26px 0 8px;background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:14px}
+.diagram svg{width:100%;height:auto;display:block}
+
+.step{padding:22px 0 20px;border-top:1px solid var(--rule)}
+.step:first-of-type{border-top:0;padding-top:6px}
+.num{font-style:normal;width:30px;height:30px;flex:none;border-radius:50%;border:2px solid var(--lumen);color:var(--lumen-ink);display:inline-grid;place-items:center;font-size:16px;font-weight:600}
+.ui{font-family:"Barlow Semi Condensed",Barlow,sans-serif;font-weight:600;background:var(--code);padding:1px 7px;border-radius:4px;white-space:nowrap}
+.sets{border-left:3px solid var(--lumen);padding:4px 0 4px 14px;color:var(--ink-2);margin:10px 0 14px}
+.pick{margin:8px 0 14px;padding-left:20px}
+.pick li{margin-bottom:6px}
+
+figure{margin:22px 0}
+figure img{border-radius:6px;border:1px solid var(--rule)}
+figcaption{font-size:15px;color:var(--ink-2);margin-top:8px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.side-fig{display:grid;grid-template-columns:230px 1fr;gap:22px;align-items:start;margin:22px 0}
+.side-fig img{border-radius:6px;border:1px solid var(--rule)}
+
+.table-wrap{overflow-x:auto;margin:14px 0 22px}
+table{border-collapse:collapse;width:100%;font-size:16px}
+th,td{text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:600;font-size:16px}
+td:first-child{font-weight:500;min-width:9em}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1px var(--rule)}
+ol.plain{padding-left:22px}
+ol.plain li{margin-bottom:10px}
+pre{background:var(--code);padding:14px 16px;border-radius:6px;overflow-x:auto;font-size:14.5px;line-height:1.5}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
+kbd{font-family:"Barlow Semi Condensed",sans-serif;font-weight:600;border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:0 6px;background:var(--panel)}
+footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-width:1180px;margin:0 auto;padding:22px 28px 40px}
+
+@media (max-width:900px){
+  .hero::after{background:linear-gradient(to top,rgba(7,8,10,.95) 0%,rgba(7,8,10,.8) 60%,rgba(7,8,10,.45) 100%)}
+  .layout{grid-template-columns:minmax(0,1fr);gap:12px;padding-top:24px}
+  .toc{position:static;border-bottom:1px solid var(--rule);padding-bottom:16px}
+  .toc ol{grid-template-columns:1fr 1fr}
+  .side-fig,.pair{grid-template-columns:1fr}
+  .side-fig img{max-width:280px}
+  .btn.ghost{margin:10px 0 0}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <img src="docs/img/ceiling.jpg" alt="A ceiling covered in radiating slot shadows, cast by a small two-shell lamp below">
+  <div class="hero-text">
+    <h1>Make a lamp that draws on the ceiling</h1>
+    <p>Tenebrae designs two perforated shells that turn around one LED. Light reaches the room only where both shells are open, so twisting one shell moves the whole pattern. This guide takes one lamp from the first decision to print files.</p>
+    <a class="btn" href="{{TOOL}}">Open the studio</a><a class="btn ghost" href="#first-lamp">Start the walkthrough</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <ol>
+      <li><a href="#light">How the light works</a></li>
+      <li><a href="#first-lamp">Your first lamp</a></li>
+      <li><a href="#explore">Explore variations</a></li>
+      <li><a href="#checks">Read the checks</a></li>
+      <li><a href="#print">Print and assemble</a></li>
+      <li><a href="#export">What the export contains</a></li>
+      <li><a href="#limits">Known limits</a></li>
+      <li><a href="#keys">Controls</a></li>
+    </ol>
+  </nav>
+
+  <main class="doc">
+    <section id="light">
+      <h2>How the light works</h2>
+      <p class="lede">Three rules explain almost everything you'll see in the preview.</p>
+      <div class="rules">
+        <div class="rule">
+          <h3>Sharpness comes from the emitter, not the distance</h3>
+          <p>An edge's blur depends on the opening size divided by the emitter size, and it doesn't change with how far away the wall is. Keep openings at least five times the emitter: a 1.4 mm LED die wants openings of 7 mm or more. Smaller openings still pass light, but they project as soft blobs.</p>
+        </div>
+        <div class="rule">
+          <h3>The room sees both shells at once</h3>
+          <p>From the LED, each shell is a mask. A point in the room is lit only where the ray from the LED passes through an opening in both. Tenebrae cuts every hole along those rays, so a 3 mm wall doesn't narrow the beam.</p>
+        </div>
+        <div class="rule">
+          <h3>Moiré multiplies motion</h3>
+          <p>With N slots on the inner shell and N + n on the outer, the room shows n bright lobes. Twisting the outer shell moves those lobes N/n times faster than the shell turns, and the look repeats every 360° ÷ (outer count) of twist.</p>
+        </div>
+      </div>
+      <figure class="diagram" aria-label="Diagram: rays from the LED pass through both shells to the ceiling only where both are open">
+        <svg viewBox="0 0 680 250" role="img">
+          <title>Rays from the LED reach the ceiling only where both shells are open</title>
+          <line x1="20" y1="24" x2="660" y2="24" stroke="currentColor" stroke-opacity=".35" stroke-width="2"/>
+          <text x="24" y="16" font-size="13" fill="currentColor" fill-opacity=".6" font-family="Barlow Semi Condensed, sans-serif">Ceiling</text>
+          <g fill="none" stroke="currentColor" stroke-width="7" stroke-opacity=".75">
+            <path d="M 250 200 A 90 90 0 0 1 285 132"/><path d="M 305 116 A 90 90 0 0 1 395 116"/><path d="M 415 132 A 90 90 0 0 1 450 200"/>
+            <path d="M 205 200 A 135 135 0 0 1 238 118"/><path d="M 262 90 A 135 135 0 0 1 328 66"/><path d="M 372 66 A 135 135 0 0 1 438 90"/><path d="M 462 118 A 135 135 0 0 1 495 200"/>
+          </g>
+          <g stroke="#d98a1c" stroke-width="2.5">
+            <line x1="350" y1="200" x2="294" y2="24"/><line x1="350" y1="200" x2="406" y2="24"/>
+          </g>
+          <g stroke="currentColor" stroke-opacity=".3" stroke-width="1.5" stroke-dasharray="4 4">
+            <line x1="350" y1="200" x2="230" y2="114"/><line x1="350" y1="200" x2="470" y2="114"/><line x1="350" y1="200" x2="350" y2="66"/>
+          </g>
+          <circle cx="350" cy="200" r="7" fill="#d98a1c"/>
+          <rect x="280" y="20" width="28" height="8" fill="#d98a1c" opacity=".8"/><rect x="392" y="20" width="28" height="8" fill="#d98a1c" opacity=".8"/>
+          <g font-family="Barlow Semi Condensed, sans-serif" font-size="14" fill="currentColor">
+            <text x="365" y="222">LED at the cut origin</text>
+            <text x="505" y="150">Outer shell</text><text x="460" y="190">Inner shell</text>
+            <text x="440" y="46" fill="#b36f10">Open on both: light</text>
+            <text x="120" y="80" fill-opacity=".6">Blocked by either: shadow</text>
+          </g>
+        </svg>
+      </figure>
+    </section>
+
+    <section id="first-lamp">
+      <h2>Your first lamp</h2>
+      <p class="lede">Start from the default design: a table uplight with two capped cylinders, 36 and 39 slots, and an upward-facing LED die. Each step below matches a numbered step in the studio's sidebar. Stay in <span class="ui">Basic</span> until step 8.</p>
+
+      <div class="side-fig">
+        <img src="docs/img/sidebar.jpg" alt="Studio sidebar in Basic mode with steps Lamp, Target and Light open">
+        <p>The sidebar reads top to bottom in the order the decisions depend on each other. Each step's header shows its current choice, so a collapsed sidebar is a summary of the whole lamp. <span class="ui">Advanced</span> reveals every parameter; <span class="ui">Basic</span> keeps the 23 that shape the look.</p>
+      </div>
+
+      <section class="step" id="step-1">
+        <h3><i class="num">1</i>Lamp</h3>
+        <p>Choose <span class="ui">Table lamp</span> or <span class="ui">Pendant</span>.</p>
+        <p class="sets">Sets the light height, 900 mm for a table lamp and 1900 mm for a pendant, and re-frames the camera.</p>
+      </section>
+
+      <section class="step" id="step-2">
+        <h3><i class="num">2</i>Target</h3>
+        <p>Pick where the pattern should land. This is the decision the rest follow, because it sets which way the emitter faces and whether the shells get top caps.</p>
+        <ul class="pick">
+          <li><strong>Ceiling and upper walls:</strong> upward LED die, top caps on. The v1 lamp.</li>
+          <li><strong>Walls at lamp height:</strong> vertical filament, caps off. Vertical slots stay sharp; horizontal features blur.</li>
+          <li><strong>Floor and lower walls:</strong> downward die. Bottom caps don't exist yet, so the floor gets a bright disc.</li>
+          <li><strong>Everywhere:</strong> two dies back to back, with a dim band at lamp height.</li>
+        </ul>
+        <p class="sets">Changing the target tells you exactly what it switched, in a message at the bottom of the screen.</p>
+      </section>
+
+      <section class="step" id="step-3">
+        <h3><i class="num">3</i>Light</h3>
+        <p>Choose the emitter and set its size. The note under the slider gives the smallest opening that stays crisp for that emitter.</p>
+        <p class="sets">For a real build: Luminus SST-20, 2700 K, CRI 95. Its emitting area is about 1.4 mm across; the dome may make it look larger, which the coupon print in <a href="#print">Print and assemble</a> will measure.</p>
+      </section>
+
+      <section class="step" id="step-4">
+        <h3><i class="num">4</i>Shells</h3>
+        <p>Set the inner shell's <span class="ui">Shape</span>, <span class="ui">Radius</span>, how far its top sits <span class="ui">above the light</span> and its bottom <span class="ui">below the light</span>, and whether it has <span class="ui">Top caps</span>.</p>
+        <p>Leave <span class="ui">Fit outer shell automatically</span> on. The outer shell then follows the inner one with a single gap, around the wall and above the cap. 9 mm is a good start: close enough that both shells stay sharp, wide enough to print and assemble.</p>
+        <p class="sets">Cylinders suit FDM. Spheres print cleanly only on SLS: split for FDM, their seam band throws a dark ring, and a capped sphere needs supports.</p>
+      </section>
+
+      <section class="step" id="step-5">
+        <h3><i class="num">5</i>Pattern</h3>
+        <p>Choose a generator and tune its two to four sliders: slots and spirals, rings and waves, phyllotaxis dots, Voronoi cells, or a superformula lattice.</p>
+        <p>For crisp rays on the default shells, use 20 to 24 slots. That gives openings of 6 to 7.5 mm, at least 4.5 times the die. The default 36 slots give softer, finer rays.</p>
+        <p>Keep <span class="ui">Cap follows wall pattern</span> on: slots carry on as spokes across the cap, and the whole shell repeats at one twist period, which suits a hand-twisted lamp.</p>
+        <p class="sets"><span class="ui">Randomize</span> lives here too. See <a href="#explore">Explore variations</a>.</p>
+      </section>
+
+      <section class="step" id="step-6">
+        <h3><i class="num">6</i>Moiré</h3>
+        <p><span class="ui">Same as inner, detuned</span> copies the inner pattern to the outer shell and adds <span class="ui">Detune</span> to its count. A detune of 2 or 3 gives two or three broad lobes around the room; larger detunes get busier. <span class="ui">Mirror</span> reverses the outer pattern, turning twisted slots into a crossing lattice.</p>
+        <p><span class="ui">Independent</span> gives the outer shell its own generator, for pairings such as Voronoi cells over rings. The note under the controls counts the lobes and how much they amplify a twist.</p>
+      </section>
+
+      <section class="step" id="step-7">
+        <h3><i class="num">7</i>Motion</h3>
+        <p>Use <span class="ui">Manual twist</span> for v1. Drag <span class="ui">Outer shell twist</span> and use <span class="ui">Bookmark this twist</span> for looks you want to find again. The note gives the repeat period: 9.23° for 39 slots. Put tick marks on the physical rim every quarter of that period.</p>
+        <p class="sets"><span class="ui">Motor</span> shows both shell speeds, plays the spin, and says how fast the room pattern turns.</p>
+      </section>
+
+      <section class="step" id="step-8">
+        <h3><i class="num">8</i>Make</h3>
+        <p>Choose <span class="ui">FDM</span> or <span class="ui">SLS / MJF</span>; this sets the minimum web, minimum hole and clearance. The line under it says whether the design is ready. When it is, use <span class="ui">Export print files</span> in the header.</p>
+        <p class="sets">In <span class="ui">Advanced</span> you can change the minimums, the shell clearance, filling of undersized holes, sphere splitting and the grid resolution. A coarser grid gives smaller files.</p>
+      </section>
+
+      <p>Use the <span class="ui">Room</span>, <span class="ui">Wall</span>, <span class="ui">Ceiling</span> and <span class="ui">Lamp</span> buttons to jump between viewpoints, and <span class="ui">Exposure</span> under Preview to brighten the room. Soft shadows sharpen over a second or two after each change.</p>
+      <figure class="pair">
+        <img src="docs/img/lamp.jpg" alt="Close-up of the capped lamp from above, spiral cap cut-outs glowing">
+        <img src="docs/img/stars.jpg" alt="Ceiling covered in star-shaped shadows from the superformula preset">
+        <figcaption>Lamp view from above, and the superformula stars preset in Ceiling view.</figcaption>
+      </figure>
+    </section>
+
+    <section id="explore">
+      <h2>Explore variations</h2>
+      <p><span class="ui">Load a preset</span> in the header groups designs into table uplights, other targets and older studies. Presets replace the shells and the moiré, and the light where a preset needs a particular one. Your room and fabrication settings stay as they are.</p>
+      <div class="side-fig">
+        <img src="docs/img/pattern.jpg" alt="Pattern and Moiré steps with Randomize, Undo and lock buttons beside each slider">
+        <div>
+          <p><span class="ui">Randomize</span>, or <kbd>R</kbd>, changes the visible, unlocked sliders in Pattern and Moiré. It tries up to ten variations and keeps the first one that passes the print checks. <span class="ui">Undo</span> brings the previous pattern back.</p>
+          <p>The lock beside a slider keeps that value through every randomize. In <span class="ui">Basic</span> only the basic sliders change; switch to <span class="ui">Advanced</span> to let wobble, jitter or seed change too.</p>
+          <p><span class="ui">Save design</span> downloads the design as JSON and <span class="ui">Open design</span> loads it again. The studio also remembers your last design in this browser.</p>
+        </div>
+      </div>
+      <figure><img src="docs/img/dots.jpg" alt="Room view of the phyllotaxis dots preset: elliptical light spots across the ceiling and walls"><figcaption>The phyllotaxis dots preset in Room view: 260 dots inside, 273 outside.</figcaption></figure>
+    </section>
+
+    <section id="checks">
+      <h2>Read the checks</h2>
+      <p>Under the preview, each shell is unwrapped flat: the wall at the bottom, the cap above the solid corner band. Colours mark what the fabrication checks changed or found.</p>
+      <figure><img src="docs/img/strip.jpg" alt="Unwrapped masks of both shells and the checks table"><figcaption>Unwrapped masks and the checks table for the default design.</figcaption></figure>
+      <div class="table-wrap"><table>
+        <thead><tr><th scope="col">Row or colour</th><th scope="col">What it means</th><th scope="col">What to do</th></tr></thead>
+        <tbody>
+          <tr><td>Status: Blocked</td><td>The shell can't be made. The notes below the table say why.</td><td>Most often the pattern cuts the shell into rings: lower the open fraction or add bridges.</td></tr>
+          <tr><td><span class="sw" style="background:#c93b3b"></span>Islands removed</td><td>Solid pieces with no path to a rim, dropped automatically.</td><td>Nothing, unless you miss them in the preview.</td></tr>
+          <tr><td><span class="sw" style="background:#e6781e"></span>Webs under the minimum</td><td>Solid strips thinner than the process can print.</td><td>Lower the count or the open fraction, or enlarge the cap hub.</td></tr>
+          <tr><td><span class="sw" style="background:#8c6ef0"></span>Holes filled</td><td>Holes too small to print anywhere, filled solid. Usually slivers where a pattern meets a rim.</td><td>Usually nothing. Switch filling off under Make, Advanced, to see them as open.</td></tr>
+          <tr><td>Triangles</td><td>Mesh size. Each million triangles is about 50 MB of STL.</td><td>Raise the grid resolution for smaller files.</td></tr>
+        </tbody>
+      </table></div>
+      <p>The notes list also reports the closest gap between the shells, whether the emitter fits inside the inner shell, and the print orientation.</p>
+    </section>
+
+    <section id="print">
+      <h2>Print and assemble</h2>
+      <ol class="plain">
+        <li><strong>Print coupons first.</strong> Flat plates 3 and 4 mm thick, with slot and hole ladders from 2 to 10 mm. Shine the real LED through them onto a wall. You'll learn the true blur, which holes FDM keeps open, and how much light the material leaks.</li>
+        <li><strong>Use matte black PETG or ASA.</strong> PLA softens around 60 °C, and light-coloured material glows, which washes out contrast.</li>
+        <li><strong>Print capped cylinders cap-down.</strong> The cap sits flat on the bed and needs no support. Slots on vertical walls print cleanly; rings and dots leave overhanging hole tops, because Tenebrae doesn't make teardrop shapes yet.</li>
+        <li><strong>Mount the light at the centre.</strong> SST-20 on a 10 mm copper board, on an aluminium stem at the shell centre, within ±3 mm. Drive it with a Mean Well LDD-700L at 350 to 700 mA from a certified 24 V adapter, and dim with the driver's analogue input.</li>
+        <li><strong>Let the outer shell turn with friction.</strong> Run its bottom rim on a printed V-groove race with 6 mm BBs, plus a felt pad for drag so it stays where you leave it. <code>interface.json</code> has the rim diameters and gaps for designing this in CAD.</li>
+      </ol>
+    </section>
+
+    <section id="export">
+      <h2>What the export contains</h2>
+      <p><span class="ui">Export print files</span> builds the meshes at the full grid resolution, checks each one is watertight, and downloads one zip:</p>
+<pre><code>inner-shell.stl     one watertight part (lower/upper halves for split spheres)
+outer-shell.stl
+design.json         reopen with Open design
+interface.json      end diameters, cap planes, hub radius, closest gap,
+                    required clearance, twist periods, bookmarks
+checks.txt          triangle counts, watertight results, hole and web counts, notes</code></pre>
+      <p>Units are millimetres. The light centre is the origin and z points up. Capped shells export as one cup each, with the wall and cap as a single part.</p>
+    </section>
+
+    <section id="limits">
+      <h2>Known limits</h2>
+      <ul class="pick">
+        <li>Open ends throw bright discs. Top caps fix the ceiling; bottom caps aren't built yet.</li>
+        <li>The preview shows direct light only. A real room adds bounce light, so raise <span class="ui">Ambient fill</span> to judge contrast.</li>
+        <li>The emitter lights all directions equally unless you set it to upward or downward.</li>
+        <li>Hole walls aren't drawn in the lamp close-up; the room projection is exact.</li>
+        <li>Where the wall meets a cap, the top edge has a chamfer of up to one grid cell (0.7 mm by default).</li>
+        <li>The solid cap hub leaves a dark spot directly above the lamp.</li>
+      </ul>
+    </section>
+
+    <section id="keys">
+      <h2>Controls</h2>
+      <div class="table-wrap"><table>
+        <tbody>
+          <tr><td>Orbit</td><td>Drag the preview</td></tr>
+          <tr><td>Pan</td><td>Right-drag, or <kbd>Shift</kbd> and drag</td></tr>
+          <tr><td>Zoom</td><td>Scroll, or pinch</td></tr>
+          <tr><td>Randomize</td><td><kbd>R</kbd>, when no text field has focus</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+<footer>Tenebrae is open source under the MIT licence. Source, issues and the build: <a href="https://github.com/knnurl/tenebrae-studio">github.com/knnurl/tenebrae-studio</a>.</footer>
+<script>
+// Highlight the contents entry for the section in view.
+(() => {
+  const links = [...document.querySelectorAll('.toc a')], map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const io = new IntersectionObserver(es => { es.forEach(e => { if (e.isIntersecting) { links.forEach(a => a.classList.remove('on')); const a = map.get(e.target.id); a && a.classList.add('on'); } }); }, { rootMargin: '-20% 0px -70% 0px' });
+  map.forEach((a, id) => { const s = document.getElementById(id); s && io.observe(s); });
+})();
+</script>
+</body>
+</html>

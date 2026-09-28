@@ -1,0 +1,1903 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tenebrae — two-shell shadow lamp designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceef1;--panel:#f6f7f8;--field:#fff;--ink:#23272e;--ink-2:#5b626c;--rule:#d3d7dc;--lumen:#d98a1c;--lumen-ink:#7a4a05;--on-lumen:#1d1605;--bad:#c93b3b;--warn:#c96a16;--odd:#7657d6;--ok:#3f7d4e;--track:#cfd3d8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f2329;--panel:#262b32;--field:#1c2026;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--on-lumen:#1d1605;--bad:#ef6a6a;--warn:#f09a4a;--odd:#a58df0;--ok:#7cc48d;--track:#3a414b}}
+:root[data-theme="dark"]{--bg:#1f2329;--panel:#262b32;--field:#1c2026;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--on-lumen:#1d1605;--bad:#ef6a6a;--warn:#f09a4a;--odd:#a58df0;--ok:#7cc48d;--track:#3a414b}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 "Barlow Semi Condensed",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--lumen);outline-offset:2px}
+.app{display:grid;grid-template-columns:330px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100%}
+header{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:8px 16px;border-bottom:1px solid var(--rule);background:var(--panel);flex-wrap:wrap}
+.mark-word{font-weight:600;font-size:26px;letter-spacing:.01em;line-height:1;margin:0;display:flex;align-items:baseline;gap:10px}
+.mark-word span{font-weight:400;font-size:15px;color:var(--ink-2);letter-spacing:0}
+.mark-word b{font-weight:600;background:radial-gradient(circle at 30% 45%,var(--lumen) 0 18%,transparent 62%);-webkit-background-clip:text;background-clip:text;color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 12px;cursor:pointer;color:var(--ink-2)}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.spacer{flex:1}
+#preset{max-width:230px}
+@media (max-width:1280px){.mark-word span{display:none}}
+select{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:4px 8px}
+.btn{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:5px 12px;cursor:pointer}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--lumen);border-color:var(--lumen);color:var(--on-lumen);font-weight:600}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:none}
+aside{overflow:auto;background:var(--panel);border-right:1px solid var(--rule);min-height:0;overscroll-behavior:contain}
+details{border-bottom:1px solid var(--rule)}
+summary{cursor:pointer;padding:11px 16px;font-weight:600;font-size:16px;list-style:none;display:flex;align-items:center;gap:10px}
+.step{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.step i{font-style:normal;width:21px;height:21px;border-radius:50%;border:1.5px solid var(--ink-2);display:inline-grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink-2)}
+details[open] .step i{border-color:var(--lumen);color:var(--lumen-ink)}
+.sum{margin-left:auto;color:var(--ink-2);font-weight:400;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.level{position:sticky;top:0;z-index:1;background:var(--panel);padding:10px 16px 8px;border-bottom:1px solid var(--rule);display:grid;gap:6px}
+.level .seg{justify-self:start}
+h3.sub{margin:8px 0 0;font-size:14px;font-weight:600;color:var(--ink)}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";flex:none;width:7px;height:7px;border-right:1.5px solid var(--ink-2);border-bottom:1.5px solid var(--ink-2);transform:rotate(-45deg);transition:transform .15s}
+details[open] summary::after{transform:rotate(45deg)}
+.sec{padding:0 16px 14px;display:grid;gap:9px}
+.ctl{display:grid;grid-template-columns:1fr 68px;gap:2px 8px;align-items:center}
+.ctl label{color:var(--ink-2);font-size:14px}
+.ctl input[type=number]{width:68px;text-align:right;background:var(--field);border:1px solid var(--rule);border-radius:4px;padding:1px 5px;font-size:14px}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--lumen);margin:0;height:18px}
+.ctl.sel{grid-template-columns:1fr auto}
+.ctl.lk{grid-template-columns:1fr 68px 24px}
+.lock{width:24px;height:22px;display:grid;place-items:center;border:1px solid transparent;border-radius:4px;background:none;color:var(--track);cursor:pointer;padding:0}
+.lock:hover{color:var(--ink-2)}
+.lock[aria-pressed="true"]{color:var(--lumen);border-color:var(--rule);background:var(--field)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ctl.sel select{max-width:190px}
+.ctl.chk{grid-template-columns:auto 1fr;gap:8px}
+.ctl.chk input{accent-color:var(--lumen);width:16px;height:16px;margin:0}
+.ctl.chk label{color:var(--ink)}
+.hint{margin:2px 0 0;font-size:13.5px;color:var(--ink-2);max-width:60ch}
+.marks{display:flex;flex-wrap:wrap;gap:6px}
+.mark{display:inline-flex;border:1px solid var(--rule);border-radius:999px;overflow:hidden}
+.chip{background:var(--field);border:0;padding:2px 10px;cursor:pointer;font-size:14px}
+.chip.add{border:1px dashed var(--ink-2);border-radius:999px;background:none;color:var(--ink-2)}
+.mark .x{background:none;border:0;border-left:1px solid var(--rule);padding:0 8px;cursor:pointer;color:var(--ink-2)}
+.btnrow{display:flex;gap:8px}
+main{display:grid;grid-template-rows:minmax(0,1fr) 236px;min-height:0;min-width:0}
+#view{position:relative;min-height:0;background:#07080a}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl:active{cursor:grabbing}
+#refine{position:absolute;left:14px;bottom:10px;color:#b9bec6;font-size:13px;pointer-events:none}
+.help{position:absolute;right:14px;bottom:10px;color:#8d939c;font-size:13px;pointer-events:none}
+#glerr{position:absolute;inset:auto 16px 16px 16px;background:var(--panel);color:var(--bad);padding:10px 14px;border-radius:6px}
+.strip{display:grid;grid-template-columns:minmax(0,1fr) 330px;border-top:1px solid var(--rule);background:var(--panel);min-height:0}
+#maskbox{position:relative;margin:12px 14px 10px;min-width:0;min-height:0}
+#mask{position:absolute;inset:0}
+.report{border-left:1px solid var(--rule);padding:10px 14px;overflow:auto;min-height:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:2px 4px;text-align:right}
+th[scope=row]{text-align:left;font-weight:400;color:var(--ink-2)}
+th[scope=col]{font-weight:600}
+td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:var(--warn);font-weight:600} td.odd{color:var(--odd);font-weight:600}
+#notes{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;font-size:13.5px}
+#notes li{padding-left:12px;position:relative;max-width:60ch}
+#notes li::before{content:"";position:absolute;left:0;top:.45em;width:6px;height:6px;border-radius:50%;background:var(--ink-2)}
+#notes li.bad{color:var(--bad)} #notes li.bad::before{background:var(--bad)}
+#notes li.warn::before{background:var(--warn)} #notes li.ok::before{background:var(--ok)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--ink-2);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px var(--rule)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 16px;border-radius:6px;font-size:14px;z-index:5;max-width:90vw}
+#toast.bad{background:var(--bad);color:#fff}
+@media (max-width:900px){
+  .app{display:flex;flex-direction:column;height:auto}
+  header{order:0;gap:10px}
+  main{order:1;grid-template-rows:62vh auto}
+  aside{order:2}
+  .strip{grid-template-columns:1fr}
+  #maskbox{height:200px}
+  .report{border-left:0;border-top:1px solid var(--rule)}
+  aside{border-right:0;border-top:1px solid var(--rule)}
+  .help{display:none}
+}
+@media (prefers-reduced-motion:reduce){summary::after{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1 class="mark-word"><b>Tenebrae</b><span>two-shell shadow lamps</span></h1>
+    <select id="preset" aria-label="Load a preset"><option value="" disabled selected>Load a preset</option></select>
+    <div class="seg" role="group" aria-label="Camera">
+      <button data-view="room" aria-pressed="true">Room</button><button data-view="wall">Wall</button><button data-view="ceiling">Ceiling</button><button data-view="lamp">Lamp</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="loadjson">Open design</button>
+    <button class="btn" id="savejson">Save design</button>
+    <button class="btn primary" id="export">Export print files</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </header>
+  <aside id="side" aria-label="Design controls"></aside>
+  <main>
+    <div id="view">
+      <canvas id="gl" aria-label="Room preview. Drag to orbit, right-drag or shift-drag to pan, scroll to zoom."></canvas>
+      <div id="refine"></div>
+      <div class="help">Drag to orbit, right-drag to pan, scroll to zoom</div>
+      <div id="glerr" hidden>This browser has no WebGL2, so the room preview is off. Pattern checks and export still work.</div>
+    </div>
+    <div class="strip">
+      <div id="maskbox"><canvas id="mask" aria-label="Unwrapped shell patterns"></canvas></div>
+      <div class="report">
+        <table id="checks" aria-label="Fabrication checks"></table>
+        <div class="legend"><span><i style="background:#f4d6a0"></i>Open</span><span><i style="background:#343940"></i>Solid</span><span><i style="background:#c93b3b"></i>Removed island</span><span><i style="background:#e6781e"></i>Thin web</span><span><i style="background:#8c6ef0"></i>Undersized hole, filled</span></div>
+        <ul id="notes"></ul>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+<script>
+// ===== Tenebrae core: pure geometry, no DOM. Units: mm, radians internally. =====
+const TAU = Math.PI * 2;
+const DEG = Math.PI / 180;
+const FORCE = 4;              // mm magnitude used for forced-solid / dropped regions
+const GA = Math.PI * (3 - Math.sqrt(5)); // golden angle
+const MASK_CLAMP = 2;         // mm range packed into the 8-bit preview texture
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const wrapPi = x => x - TAU * Math.round(x / TAU);
+
+// ---------- Pattern generators ----------
+// Each returns a field in mm: negative = open (light passes), positive = solid.
+const GENS = {
+  slots: {
+    label: 'Slots and spirals', count: 'N', azimuthal: true,
+    params: [
+      { k: 'N', basic: true, label: 'Slots around', min: 3, max: 240, step: 1, def: 60 },
+      { k: 'twist', basic: true, label: 'Twist (° per ° of elevation)', min: -3, max: 3, step: 0.01, def: 0 },
+      { k: 'wobA', label: 'Wobble amplitude (°)', min: 0, max: 20, step: 0.1, def: 0 },
+      { k: 'wobK', label: 'Wobble waves per 90°', min: 0, max: 12, step: 0.5, def: 2 },
+      { k: 'duty', basic: true, label: 'Open fraction', min: 0.05, max: 0.9, step: 0.01, def: 0.34 },
+    ],
+    prepare(ctx, p) {
+      const N = Math.round(p.N), tw = p.twist, A = p.wobA * DEG, K = p.wobK * 4, duty = p.duty;
+      return (phi, j) => {
+        const psi = ctx.psi[j];
+        const th = N * (phi + tw * psi + A * Math.sin(K * psi));
+        const gpsi = N * (tw + A * K * Math.cos(K * psi));
+        const a = N / ctx.rho[j], c = gpsi / ctx.dsd[j], g = Math.sqrt(a * a + c * c);
+        return (Math.abs(wrapPi(th)) - Math.PI * duty) / g;
+      };
+    },
+  },
+  rings: {
+    label: 'Rings and waves', count: 'K', azimuthal: true,
+    params: [
+      { k: 'pitch', basic: true, label: 'Ring pitch (° of elevation)', min: 1, max: 30, step: 0.1, def: 6 },
+      { k: 'K', basic: true, label: 'Waves around', min: 0, max: 48, step: 1, def: 6 },
+      { k: 'amp', label: 'Wave amplitude (°)', min: 0, max: 15, step: 0.1, def: 1.5 },
+      { k: 'duty', basic: true, label: 'Open fraction', min: 0.05, max: 0.9, step: 0.01, def: 0.4 },
+      { k: 'bridges', basic: true, label: 'Bridges around', min: 0, max: 48, step: 1, def: 12 },
+      { k: 'bridgeW', label: 'Bridge width (mm)', min: 1, max: 10, step: 0.1, def: 3 },
+    ],
+    prepare(ctx, p) {
+      const P = p.pitch * DEG, K = Math.round(p.K), A = p.amp * DEG, duty = p.duty;
+      const B = Math.round(p.bridges), bh = p.bridgeW / 2;
+      return (phi, j) => {
+        const psi = ctx.psi[j];
+        const th = TAU * (psi + A * Math.sin(K * phi)) / P;
+        const gphi = TAU * A * K * Math.cos(K * phi) / P / ctx.rho[j], gpsi = TAU / P / ctx.dsd[j];
+        const v = (Math.abs(wrapPi(th)) - Math.PI * duty) / Math.sqrt(gphi * gphi + gpsi * gpsi);
+        if (!B) return v;
+        const b = bh - ctx.rho[j] * Math.abs(wrapPi(B * phi)) / B;
+        return v > b ? v : b;
+      };
+    },
+  },
+  phyllo: {
+    label: 'Phyllotaxis dots', count: 'N', azimuthal: false,
+    params: [
+      { k: 'N', basic: true, label: 'Dots', min: 20, max: 3000, step: 1, def: 420 },
+      { k: 'size', basic: true, label: 'Dot size (× spacing)', min: 0.1, max: 0.95, step: 0.01, def: 0.55 },
+      { k: 'grad', label: 'Size gradient, bottom to top', min: -1, max: 1, step: 0.01, def: 0 },
+    ],
+    prepare(ctx, p) {
+      const N = Math.round(p.N);
+      const pre = fibPoints(ctx, N, 0, 0, 1);
+      const inset = pre.spacing * p.size * 0.5 * (1 + Math.abs(p.grad)) + 0.5;
+      const F = fibPoints(ctx, N, inset, 0, 1);
+      let maxR = 0;
+      for (const q of F.pts) {
+        q.r = Math.max(0.05 * F.spacing, F.spacing * p.size * 0.5 * (1 + p.grad * (2 * q.u - 1)));
+        maxR = Math.max(maxR, q.r);
+      }
+      const H = makeHash(ctx, F.pts, F.spacing);
+      const search = Math.min(F.spacing * 1.2, FORCE + 1) + maxR;
+      return (phi, j) => {
+        let best = FORCE;
+        H.query(phi, ctx.bandS[j], ctx.rho[j], search, (q, dx, dy) => {
+          const v = Math.sqrt(dx * dx + dy * dy) - q.r; if (v < best) best = v;
+        });
+        return best;
+      };
+    },
+  },
+  voronoi: {
+    label: 'Voronoi cells', count: 'N', azimuthal: false,
+    params: [
+      { k: 'N', basic: true, label: 'Cells', min: 20, max: 2000, step: 1, def: 240 },
+      { k: 'web', basic: true, label: 'Web width (mm)', min: 0.8, max: 12, step: 0.1, def: 3 },
+      { k: 'jitter', label: 'Irregularity', min: 0, max: 1, step: 0.01, def: 0.6 },
+      { k: 'seed', label: 'Seed', min: 1, max: 999, step: 1, def: 7 },
+    ],
+    prepare(ctx, p) {
+      const F = fibPoints(ctx, Math.round(p.N), 0, p.jitter, Math.round(p.seed));
+      const H = makeHash(ctx, F.pts, F.spacing);
+      const pts = F.pts, np = pts.length, half = p.web / 2, C = half + FORCE + 1;
+      pts.forEach((q, i) => q.i = i);
+      // Neighbour graph (radius covers Delaunay neighbours for Fibonacci-like sets).
+      const nb = pts.map(q => { const L = []; H.query(q.phi, q.s, ctx.rhoAt(q.s), F.spacing * 2.6, (o) => { if (o !== q) L.push(o.i); }); return Int32Array.from(L); });
+      const PH = Float64Array.from(pts, q => q.phi), PS = Float64Array.from(pts, q => q.s);
+      let cur = -1, curRow = -1;
+      return (phi, j) => {
+        if (np < 2) return FORCE;
+        const s = ctx.bandS[j], rq = ctx.rho[j];
+        if (curRow !== j || cur < 0) {
+          let bd = Infinity; cur = -1;
+          H.query(phi, s, rq, F.spacing * 3, (q, dx, dy) => { const d2 = dx * dx + dy * dy; if (d2 < bd) { bd = d2; cur = q.i; } });
+          curRow = j; if (cur < 0) return FORCE;
+        }
+        // Greedy walk to the nearest site.
+        let dxc = rq * wrapPi(PH[cur] - phi), dyc = PS[cur] - s, dc = dxc * dxc + dyc * dyc;
+        for (let moved = true; moved;) {
+          moved = false; const L = nb[cur];
+          for (let t = 0; t < L.length; t++) {
+            const o = L[t], dx = rq * wrapPi(PH[o] - phi), dy = PS[o] - s, d2 = dx * dx + dy * dy;
+            if (d2 < dc) { dc = d2; cur = o; dxc = dx; dyc = dy; moved = true; }
+          }
+        }
+        const L = nb[cur]; let de = C;
+        for (let t = 0; t < L.length; t++) {
+          const o = L[t], dx = rq * wrapPi(PH[o] - phi), dy = PS[o] - s;
+          const ex = dx - dxc, ey = dy - dyc, sep = Math.sqrt(ex * ex + ey * ey);
+          if (sep < 1e-6) continue;
+          const e = (dx * dx + dy * dy - dc) / (2 * sep); if (e < de) de = e;
+        }
+        return half - de;
+      };
+    },
+  },
+  superformula: {
+    label: 'Superformula lattice', count: 'N', azimuthal: true,
+    params: [
+      { k: 'N', basic: true, label: 'Shapes per row', min: 3, max: 120, step: 1, def: 18 },
+      { k: 'rows', basic: true, label: 'Rows', min: 1, max: 40, step: 1, def: 7 },
+      { k: 'm', basic: true, label: 'Symmetry m', min: 0, max: 12, step: 1, def: 5 },
+      { k: 'n1', label: 'n1', min: 0.2, max: 10, step: 0.05, def: 0.8 },
+      { k: 'n2', label: 'n2', min: 0.2, max: 10, step: 0.05, def: 1.2 },
+      { k: 'n3', label: 'n3', min: 0.2, max: 10, step: 0.05, def: 1.2 },
+      { k: 'size', basic: true, label: 'Size (× cell)', min: 0.1, max: 1, step: 0.01, def: 0.82 },
+      { k: 'grad', label: 'Size gradient, bottom to top', min: -1, max: 1, step: 0.01, def: 0 },
+      { k: 'spin', label: 'Rotation per row (°)', min: -90, max: 90, step: 0.5, def: 0 },
+      { k: 'stagger', label: 'Stagger rows', type: 'bool', def: true },
+    ],
+    prepare(ctx, p) {
+      const N = Math.round(p.N), M = Math.round(p.rows), m = p.m;
+      const n1 = p.n1, n2 = p.n2, n3 = p.n3;
+      const rsf = th => Math.pow(Math.pow(Math.abs(Math.cos(m * th / 4)), n2) + Math.pow(Math.abs(Math.sin(m * th / 4)), n3), -1 / n1);
+      const LN = 2048, lut = new Float32Array(LN + 1);
+      let rmax = 0; for (let i = 0; i <= LN; i++) { lut[i] = rsf(i * TAU / LN); if (i < LN) rmax = Math.max(rmax, lut[i]); }
+      for (let i = 0; i <= LN; i++) lut[i] /= rmax;
+      const shape = th => { let u = (th / TAU) % 1; if (u < 0) u += 1; const x = u * LN, i = x | 0, f = x - i; return lut[i] + (lut[i + 1] - lut[i]) * f; };
+      const ch = (ctx.sHi - ctx.sLo) / M, cellAng = TAU / N;
+      const rowS = [], rowHalf = [];
+      for (let r = 0; r < M; r++) {
+        const sc = ctx.sLo + (r + 0.5) * ch;
+        const sz = p.size * (1 + p.grad * (2 * (r + 0.5) / M - 1));
+        rowS.push(sc); rowHalf.push(Math.max(0.2, sz) * Math.min(ctx.rhoAt(sc) * cellAng, ch) / 2);
+      }
+      return (phi, j) => {
+        const s = ctx.bandS[j], rq = ctx.rho[j];
+        const r0 = Math.floor((s - ctx.sLo) / ch);
+        let best = FORCE;
+        for (let r = r0 - 1; r <= r0 + 1; r++) {
+          if (r < 0 || r >= M) continue;
+          const off = p.stagger && (r & 1) ? 0.5 : 0;
+          const c0 = Math.round(phi / cellAng - off);
+          for (let c = c0 - 1; c <= c0 + 1; c++) {
+            const pc = (c + off) * cellAng;
+            const dx = rq * wrapPi(phi - pc), dy = s - rowS[r];
+            const th = Math.atan2(dy, dx) - r * p.spin * DEG;
+            const v = Math.sqrt(dx * dx + dy * dy) - rowHalf[r] * shape(th);
+            if (v < best) best = v;
+          }
+        }
+        return best;
+      };
+    },
+  },
+};
+
+function genDefaults() {
+  const o = {};
+  for (const g in GENS) { o[g] = {}; for (const q of GENS[g].params) o[g][q.k] = q.def; }
+  return o;
+}
+
+// Equal-area Fibonacci points on the outer face, in (phi, s) chart coords.
+function fibPoints(ctx, N, inset, jitter, seed) {
+  const a = ctx.sLo + inset, b = ctx.sHi - inset;
+  const W = ctx.W || (s => ctx.sph ? Math.sin(s / ctx.Ro) : s);
+  const Wi = ctx.Wi || (w => ctx.sph ? ctx.Ro * Math.asin(Math.max(-1, Math.min(1, w))) : w);
+  const K = ctx.areaK || (ctx.sph ? TAU * ctx.Ro * ctx.Ro : TAU * ctx.Ro);
+  const wa = W(Math.min(a, b)), wb = W(Math.max(a, b));
+  const area = K * (wb - wa);
+  const spacing = Math.sqrt(Math.max(area, 1) / N);
+  const rnd = mulberry32(seed);
+  const pts = [];
+  for (let k = 0; k < N; k++) {
+    const u = (k + 0.5) / N;
+    let s = Wi(wa + u * (wb - wa));
+    let phi = (k * GA) % TAU;
+    if (jitter > 0) {
+      phi += (rnd() - 0.5) * jitter * spacing / ctx.rhoAt(s);
+      s = Math.max(ctx.sLo, Math.min(ctx.sHi, s + (rnd() - 0.5) * jitter * spacing));
+    }
+    pts.push({ phi: ((phi % TAU) + TAU) % TAU, s, u });
+  }
+  return { pts, spacing };
+}
+
+// Bucket grid for neighbour queries in the (phi, s) chart with local metric.
+function makeHash(ctx, pts, spacing) {
+  const h = Math.max(spacing, 0.5);
+  const nRows = Math.max(1, Math.ceil((ctx.sHi - ctx.sLo) / h) + 1);
+  const rows = [];
+  for (let r = 0; r < nRows; r++) {
+    const sc = ctx.sLo + (r + 0.5) * h;
+    const nc = Math.max(1, Math.floor(TAU * ctx.rhoAt(Math.min(sc, ctx.sHi)) / h));
+    rows.push({ nc, cells: Array.from({ length: nc }, () => []) });
+  }
+  for (const q of pts) {
+    const r = Math.min(nRows - 1, Math.max(0, Math.floor((q.s - ctx.sLo) / h)));
+    const R = rows[r]; R.cells[Math.min(R.nc - 1, Math.floor(q.phi / TAU * R.nc))].push(q);
+  }
+  return {
+    query(phi, s, rhoQ, radius, cb) {
+      const r0 = Math.max(0, Math.floor((s - radius - ctx.sLo) / h));
+      const r1 = Math.min(nRows - 1, Math.floor((s + radius - ctx.sLo) / h));
+      const dphi = radius / Math.max(rhoQ, 1e-3);
+      for (let r = r0; r <= r1; r++) {
+        const R = rows[r], w = TAU / R.nc;
+        let c0, c1;
+        if (dphi >= Math.PI) { c0 = 0; c1 = R.nc - 1; }
+        else { c0 = Math.floor((phi - dphi) / w); c1 = Math.floor((phi + dphi) / w); if (c1 - c0 >= R.nc) { c0 = 0; c1 = R.nc - 1; } }
+        for (let c = c0; c <= c1; c++) {
+          const cell = R.cells[((c % R.nc) + R.nc) % R.nc];
+          for (const q of cell) {
+            const dx = rhoQ * wrapPi(q.phi - phi), dy = q.s - s;
+            if (dx * dx + dy * dy <= radius * radius) cb(q, dx, dy);
+          }
+        }
+      }
+    },
+  };
+}
+
+// ---------- Shell construction ----------
+// sh: {shape, R, t, zBot, zTop, rimBot, rimTop}; pat: {gen, invert, phase, params}
+// opts: {res, minWeb, minHole, split, seam, mirror}
+function buildShell(sh, pat, opts) {
+  const errors = [], warnings = [];
+  const sph = sh.shape === 'sphere';
+  const R = sh.R, t = sh.t, Ro = R + t, res = opts.res;
+  let zBot = sh.zBot, zTop = sh.zTop;
+  if (t < 1) errors.push('Wall thickness must be at least 1 mm.');
+  if (sph) {
+    const lim = 0.95 * R;
+    if (zBot < -lim || zTop > lim) warnings.push(`Sphere openings clamped to ±${lim.toFixed(0)} mm (95% of radius).`);
+    zBot = Math.max(-lim, zBot); zTop = Math.min(lim, zTop);
+  }
+  if (zTop - zBot < 20) errors.push('Shell needs at least 20 mm of height.');
+
+  const cap = !!(sh.cap && sh.cap.on);
+  if (cap && zTop - t <= zBot + 10) errors.push('A capped shell needs at least 10 mm between the bottom opening and the cap.');
+  // Outer corner, where the outer wall meets the top plane (only used when capped).
+  const sC = sph ? Ro * Math.asin(Math.min(0.999, zTop / Ro)) : zTop;
+  const rhoC = sph ? Math.sqrt(Math.max(0, Ro * Ro - zTop * zTop)) : Ro;
+  const onCap = s => cap && s > sC;
+  const psiOfS = s => onCap(s) ? Math.atan2(zTop, rhoC - (s - sC)) : (sph ? s / Ro : Math.atan(s / Ro));
+  const pt = (face, s) => {
+    const Rs = face ? Ro : R, psi = psiOfS(s);
+    let r = sph ? Rs * Math.cos(psi) : Rs, z = sph ? Rs * Math.sin(psi) : Rs * Math.tan(psi);
+    if (cap) { const zc = face ? zTop : zTop - t; if (z > zc) { r = zc / Math.tan(psi); z = zc; } }
+    return [r, z];
+  };
+  const prof = (Rs, z) => sph ? Math.sqrt(Math.max(0, Rs * Rs - z * z)) : Rs;
+  const rhoAt = s => onCap(s) ? rhoC - (s - sC) : (sph ? Ro * Math.cos(s / Ro) : Ro);
+
+  // Pattern band on the outer face (arc length s). Capped shells run on round the corner to the hub.
+  let sLo, sHi, sEndBot, sEndTop, sWallHi, sCapLo = Infinity;
+  if (sph) { sEndBot = Ro * Math.asin(zBot / Ro); sLo = Math.max(sEndBot + sh.rimBot, Ro * Math.asin(Math.max(-0.999, zBot / R)) + 0.3); }
+  else { sEndBot = zBot; sLo = Math.max(zBot + sh.rimBot, zBot * Ro / R + 0.3); }
+  if (cap) {
+    const hub = Math.max(1, sh.cap.hub);
+    sHi = sC + rhoC - hub; sWallHi = sC - sh.rimTop / 2; sCapLo = sC + sh.rimTop / 2;
+    if (sWallHi - sLo < 6 * res) errors.push('Rims leave no room for the wall pattern. Reduce rim height or increase shell height.');
+    if (sHi - sCapLo < 6 * res) errors.push('The cap hub and corner band leave no room for the cap pattern. Shrink the hub or the corner band.');
+    if (sph && opts.fdm) warnings.push('A flat cap on a sphere needs supports on FDM. Print it on SLS, or use a cylinder.');
+  } else {
+    sEndTop = sph ? Ro * Math.asin(zTop / Ro) : zTop;
+    sHi = sph ? Math.min(sEndTop - sh.rimTop, Ro * Math.asin(Math.min(0.999, zTop / R)) - 0.3) : Math.min(zTop - sh.rimTop, zTop * Ro / R - 0.3);
+    sWallHi = sHi;
+    if (sHi - sLo < 6 * res) errors.push('Rims leave no room for the pattern. Reduce rim height or increase shell height.');
+  }
+  if (sh.rimBot < opts.minWeb || sh.rimTop < opts.minWeb) warnings.push(`A rim is narrower than the ${opts.minWeb} mm minimum web.`);
+
+  const G = { sph, R, t, Ro, zBot, zTop, sLo, sHi, cap, sC, rhoC, errors, warnings, psiOfS, pt, rhoAt };
+  if (errors.length) { G.ok = false; return G; }
+
+  // Band rows (include s = 0 exactly when the band crosses it, so a seam can sit there).
+  let n1, n2, sMid;
+  if (sLo < 0 && sHi > 0) { n1 = Math.max(2, Math.ceil(-sLo / res)); n2 = Math.max(2, Math.ceil(sHi / res)); sMid = 0; }
+  else { n1 = Math.max(6, Math.ceil((sHi - sLo) / res)); n2 = 0; sMid = sHi; }
+  const Nb = n1 + n2 + 1;
+  const bandS = new Float64Array(Nb);
+  for (let j = 0; j <= n1; j++) bandS[j] = sLo + (sMid - sLo) * j / n1;
+  for (let j = 1; j <= n2; j++) bandS[n1 + j] = sMid + (sHi - sMid) * j / n2;
+  const Nc = Math.max(24, 2 * Math.ceil(Math.PI * Ro / res));
+  const psi = new Float64Array(Nb), rho = new Float64Array(Nb), dsd = new Float64Array(Nb);
+  for (let j = 0; j < Nb; j++) {
+    psi[j] = psiOfS(bandS[j]); rho[j] = rhoAt(bandS[j]);
+    dsd[j] = onCap(bandS[j]) ? zTop / (Math.sin(psi[j]) ** 2) : sph ? Ro : Ro / (Math.cos(psi[j]) ** 2);
+  }
+
+  // Full profile rows: bottom rim, band, top rim. Rim rows blend to flat end planes.
+  const rows = [];
+  const b0 = pt(0, sLo), b0o = pt(1, sLo), bL = pt(0, sHi), bLo = pt(1, sHi);
+  const nbR = Math.max(1, Math.ceil((sLo - sEndBot) / 2)), ntR = cap ? 0 : Math.max(1, Math.ceil((sEndTop - sHi) / 2));
+  for (let k = 0; k < nbR; k++) {
+    const f = k / nbR, zi = zBot + f * (b0[1] - zBot), zo = zBot + f * (b0o[1] - zBot);
+    rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+  }
+  const bandRowStart = rows.length;
+  for (let j = 0; j < Nb; j++) {
+    const a = pt(0, bandS[j]), b = pt(1, bandS[j]);
+    rows.push({ band: j, s: bandS[j], ri: a[0], zi: a[1], ro: b[0], zo: b[1] });
+  }
+  for (let k = 1; k <= ntR; k++) {
+    const f = k / ntR, zi = bL[1] + f * (zTop - bL[1]), zo = bLo[1] + f * (zTop - bLo[1]);
+    rows.push({ band: -1, ri: prof(R, zi), zi, ro: prof(Ro, zo), zo });
+  }
+
+  // Evaluate the pattern field: wall zone, and cap zone when capped.
+  const zone = (lo, hi, extra) => Object.assign({ sph, Ro, sLo: lo, sHi: hi, bandS, psi, rho, dsd, rhoAt }, extra || {});
+  const prep = (p, ctx) => {
+    const f = (GENS[p.gen] || GENS.slots).prepare(ctx, p.params);
+    const sign = p.invert ? -1 : 1, ph = (p.phase || 0) * DEG;
+    return (phi, j) => sign * f(phi - ph, j);
+  };
+  const fWall = prep(pat, zone(sLo, sWallHi));
+  let capPat = opts.capPattern;
+  if (cap && capPat && opts.capFollow) { // same pattern as the wall: keep dot spacing and row pitch, not raw counts
+    let aW = 0, aC = 0;
+    for (let j = 0; j < Nb - 1; j++) { const a = rho[j] * (bandS[j + 1] - bandS[j]); if (bandS[j] < sWallHi) aW += a; else if (bandS[j] >= sCapLo) aC += a; }
+    const g = GENS[capPat.gen], p = Object.assign({}, capPat.params), def = k => g.params.find(q => q.k === k);
+    if (!g.azimuthal) p[g.count] = Math.max(def(g.count).min, Math.round(p[g.count] * aC / Math.max(aW, 1)));
+    if (capPat.gen === 'superformula') p.rows = Math.max(1, Math.round(p.rows * (sHi - sCapLo) / Math.max(sWallHi - sLo, 1)));
+    capPat = Object.assign({}, capPat, { params: p });
+  }
+  const fCap = cap && capPat ? prep(capPat, zone(sCapLo, sHi, {
+    W: s => (rhoC * rhoC - (rhoC - (s - sC)) ** 2) / 2,
+    Wi: w => sC + rhoC - Math.sqrt(Math.max(0, rhoC * rhoC - 2 * w)),
+    areaK: TAU,
+  })) : null;
+  const field = new Float32Array(Nb * Nc);
+  const mir = opts.mirror ? -1 : 1;
+  const split = !!(sph && opts.split && sMid === 0 && n2 > 0);
+  const forced = new Uint8Array(Nb);
+  forced[0] = 1; forced[Nb - 1] = 1;
+  if (split) for (let j = 0; j < Nb; j++) if (Math.abs(bandS[j]) <= Math.max(opts.seam / 2, 0)) forced[j] = 1;
+  if (split) forced[n1] = 1;
+  if (cap) {
+    let jc = 0;
+    for (let j = 0; j < Nb; j++) {
+      if (bandS[j] > sWallHi && bandS[j] < sCapLo) forced[j] = 1;
+      if (Math.abs(bandS[j] - sC) < Math.abs(bandS[jc] - sC)) jc = j;
+    }
+    forced[jc] = 1;
+  }
+  for (let j = 0; j < Nb; j++) {
+    const o = j * Nc;
+    if (forced[j]) { field.fill(FORCE, o, o + Nc); continue; }
+    const f = fCap && bandS[j] >= sCapLo ? fCap : fWall;
+    for (let i = 0; i < Nc; i++) {
+      let v = f(mir * (i * TAU / Nc), j);
+      if (!(v === v)) v = FORCE;             // NaN guard
+      if (Math.abs(v) < 1e-4) v = 1e-4;       // keep crossings off grid vertices
+      field[o + i] = v;
+    }
+  }
+
+  // Connectivity: solid is 8-connected, void 4-connected (matches marching-squares saddles).
+  const flags = new Uint8Array(Nb * Nc);
+  const solidLab = labelComponents(Nb, Nc, k => field[k] >= 0, true);
+  const anchors = new Set();
+  for (let j = 0; j < Nb; j++) if (forced[j]) anchors.add(solidLab.lab[j * Nc]);
+  const connected = anchors.size === 1;
+  let dropped = 0; const droppedLabels = new Set();
+  for (let k = 0; k < Nb * Nc; k++) {
+    const L = solidLab.lab[k];
+    if (L >= 0 && !anchors.has(L)) { field[k] = -FORCE; flags[k] |= 1; droppedLabels.add(L); }
+  }
+  dropped = droppedLabels.size;
+  if (!connected) errors.push(cap ? 'Pattern cuts the shell apart (wall rings or a cap that no longer reaches its hub). Narrow the open fraction or add bridges.' : 'Pattern cuts the shell into separate rings. Narrow the open fraction or add solid bands.');
+
+  let voidLab = labelComponents(Nb, Nc, k => field[k] < 0, false);
+  const rw = opts.minWeb / 2, rh = opts.minHole / 2;
+
+  // Undersized holes: void components that never reach the minimum hole width anywhere.
+  const hasCore = new Uint8Array(voidLab.count);
+  for (let k = 0; k < Nb * Nc; k++) { const L = voidLab.lab[k]; if (L >= 0 && field[k] <= -rh) hasCore[L] = 1; }
+  let small = 0; for (let c = 0; c < voidLab.count; c++) if (!hasCore[c]) small++;
+  let filled = 0;
+  for (let k = 0; k < Nb * Nc; k++) { const L = voidLab.lab[k]; if (L >= 0 && !hasCore[L]) flags[k] |= 4; }
+  if (opts.fillSmall && small) { // fill them solid rather than print blobs; recount the real holes
+    for (let k = 0; k < Nb * Nc; k++) if (flags[k] & 4) { field[k] = FORCE; flags[k] = (flags[k] & ~4) | 8; }
+    filled = small; small = 0;
+    voidLab = labelComponents(Nb, Nc, k => field[k] < 0, false);
+  }
+  const holeRows = voidLab.rowRange; // [minRow, maxRow] per component
+
+  // Thin webs: morphological opening. Erode with the distance-like field,
+  // dilate with a chamfer distance; whatever the opening can't reach is narrower than the minimum.
+  const dxRow = new Float64Array(Nb), dyRow = new Float64Array(Nb);
+  for (let j = 0; j < Nb; j++) { dxRow[j] = rho[j] * TAU / Nc; dyRow[j] = j < Nb - 1 ? bandS[j + 1] - bandS[j] : bandS[j] - bandS[j - 1]; }
+  const narrow = (inSet, core, r) => {
+    const n = Nb * Nc, d = new Float32Array(n);
+    for (let k = 0; k < n; k++) d[k] = core(k) ? 0 : 1e9;
+    chamfer(d, Nb, Nc, dxRow, dyRow);
+    const out = new Uint8Array(n);
+    for (let j = 0; j < Nb; j++) {
+      if (forced[j]) continue;
+      const slack = 0.75 * Math.sqrt(dxRow[j] * dxRow[j] + dyRow[j] * dyRow[j]);
+      for (let i = 0; i < Nc; i++) { const k = j * Nc + i; if (!(flags[k] & 1) && inSet(k) && d[k] > r + slack) out[k] = 1; }
+    }
+    return out;
+  };
+  const thinM = narrow(k => field[k] >= 0, k => field[k] >= rw, rw);
+  for (let k = 0; k < Nb * Nc; k++) if (thinM[k]) flags[k] |= 2;
+  const thinLab = labelComponents(Nb, Nc, k => thinM[k] === 1, true);
+  const thinSize = new Int32Array(thinLab.count);
+  for (let k = 0; k < Nb * Nc; k++) if (thinLab.lab[k] >= 0) thinSize[thinLab.lab[k]]++;
+  let thin = 0; for (let c = 0; c < thinLab.count; c++) if (thinSize[c] >= 4) thin++;
+
+  // Open area fraction of the band (outer face).
+  let openA = 0, totA = 0;
+  for (let j = 0; j < Nb; j++) {
+    const dy = j < Nb - 1 ? bandS[j + 1] - bandS[j] : bandS[j] - bandS[j - 1];
+    const a = rho[j] * TAU / Nc * dy;
+    for (let i = 0; i < Nc; i++) { totA += a; if (field[j * Nc + i] < 0) openA += a; }
+  }
+
+  // 8-bit preview texture (field packed around 0.5).
+  const tex = new Uint8Array(Nb * Nc);
+  for (let k = 0; k < Nb * Nc; k++) {
+    const v = Math.max(-MASK_CLAMP, Math.min(MASK_CLAMP, field[k]));
+    tex[k] = Math.max(0, Math.min(255, Math.round(127.5 + v * 127.5 / MASK_CLAMP)));
+  }
+
+  // Mesh parts (split spheres at the equator seam).
+  const last = rows.length - 1;
+  const parts = [];
+  if (split) {
+    const seamRow = bandRowStart + n1;
+    let lo = 0, hi = 0;
+    for (let c = 0; c < voidLab.count; c++) { if (holeRows[2 * c + 1] < n1) lo++; else hi++; }
+    parts.push({ suffix: 'lower', j0: 0, j1: seamRow, holes: lo, ends: 2 });
+    parts.push({ suffix: 'upper', j0: seamRow, j1: last, holes: hi, ends: cap ? 1 : 2 });
+  } else parts.push({ suffix: '', j0: 0, j1: last, holes: voidLab.count, ends: cap ? 1 : 2 });
+
+  Object.assign(G, {
+    ok: errors.length === 0, sMid, n1, n2, Nb, Nc, sWallHi, sCapLo, capHub: cap ? sh.cap.hub : 0, bandS, rows, bandRowStart, field, flags, tex, forced, split, parts,
+    stats: { holes: voidLab.count, dropped, thin, small, filled, connected, open: openA / totA,
+      estTris: estimateTris(rows.length, Nc, openA / totA) },
+  });
+  return G;
+}
+
+function estimateTris(nRows, Nc, open) { return Math.round((nRows - 1) * Nc * 4 * (1 - open) * 1.08); }
+
+// Two-pass chamfer distance (per-row metric, wraps in columns). Run twice for wrap convergence.
+function chamfer(d, Nb, Nc, dx, dy) {
+  for (let it = 0; it < 2; it++) {
+    for (let j = 0; j < Nb; j++) {
+      const hx = dx[j], o = j * Nc;
+      const vy = j > 0 ? dy[j - 1] : 0, dg = j > 0 ? Math.sqrt(hx * hx + vy * vy) : 0;
+      for (let pass = 0; pass < 2; pass++) for (let i = 0; i < Nc; i++) {
+        const k = o + i, il = (i + Nc - 1) % Nc, ir = (i + 1) % Nc;
+        let v = d[k], w = d[o + il] + hx; if (w < v) v = w;
+        if (j > 0) { const p = o - Nc; w = d[p + i] + vy; if (w < v) v = w; w = d[p + il] + dg; if (w < v) v = w; w = d[p + ir] + dg; if (w < v) v = w; }
+        d[k] = v;
+      }
+    }
+    for (let j = Nb - 1; j >= 0; j--) {
+      const hx = dx[j], o = j * Nc;
+      const vy = j < Nb - 1 ? dy[j] : 0, dg = j < Nb - 1 ? Math.sqrt(hx * hx + vy * vy) : 0;
+      for (let pass = 0; pass < 2; pass++) for (let i = Nc - 1; i >= 0; i--) {
+        const k = o + i, il = (i + Nc - 1) % Nc, ir = (i + 1) % Nc;
+        let v = d[k], w = d[o + ir] + hx; if (w < v) v = w;
+        if (j < Nb - 1) { const p = o + Nc; w = d[p + i] + vy; if (w < v) v = w; w = d[p + il] + dg; if (w < v) v = w; w = d[p + ir] + dg; if (w < v) v = w; }
+        d[k] = v;
+      }
+    }
+  }
+}
+
+// Connected components on an Nb x Nc grid, wrapping in columns.
+function labelComponents(Nb, Nc, pred, eight) {
+  const n = Nb * Nc, lab = new Int32Array(n).fill(-1), q = new Int32Array(n);
+  let count = 0; const rowRange = [];
+  for (let s = 0; s < n; s++) {
+    if (lab[s] >= 0 || !pred(s)) continue;
+    let h = 0, tl = 0; q[tl++] = s; lab[s] = count;
+    let rmin = Infinity, rmax = -Infinity;
+    while (h < tl) {
+      const k = q[h++], j = (k / Nc) | 0, i = k - j * Nc;
+      if (j < rmin) rmin = j; if (j > rmax) rmax = j;
+      for (let dj = -1; dj <= 1; dj++) {
+        const jj = j + dj; if (jj < 0 || jj >= Nb) continue;
+        for (let di = -1; di <= 1; di++) {
+          if (!dj && !di) continue;
+          if (!eight && dj && di) continue;
+          const kk = jj * Nc + (i + di + Nc) % Nc;
+          if (lab[kk] < 0 && pred(kk)) { lab[kk] = count; q[tl++] = kk; }
+        }
+      }
+    }
+    rowRange.push(rmin, rmax); count++;
+  }
+  return { lab, count, rowRange };
+}
+
+// ---------- Mesh (filled marching squares, walls cut along rays from the source) ----------
+function buildMesh(G, part) {
+  const { rows, Nc, field } = G, nR = rows.length, j0 = part.j0, j1 = part.j1;
+  const capTop = G.cap && j1 === nR - 1;
+  const pos = [], idx = [];
+  const gI = new Int32Array(nR * Nc * 2).fill(-1), hI = new Int32Array(nR * Nc * 2).fill(-1), vI = new Int32Array(nR * Nc * 2).fill(-1);
+  const dphi = TAU / Nc;
+  const val = (i, j) => rows[j].band < 0 ? FORCE : field[rows[j].band * Nc + i];
+  const add = (r, z, a) => { pos.push(r * Math.cos(a), r * Math.sin(a), z); return pos.length / 3 - 1; };
+  const grid = (i, j, fc) => { const k = (j * Nc + i) * 2 + fc; if (gI[k] < 0) { const w = rows[j]; gI[k] = add(fc ? w.ro : w.ri, fc ? w.zo : w.zi, i * dphi); } return gI[k]; };
+  const hx = (i, j, fr, fc) => { const k = (j * Nc + i) * 2 + fc; if (hI[k] < 0) { const w = rows[j]; hI[k] = add(fc ? w.ro : w.ri, fc ? w.zo : w.zi, (i + fr) * dphi); } return hI[k]; };
+  const vx = (i, j, fr, fc) => {
+    const k = (j * Nc + i) * 2 + fc;
+    if (vI[k] < 0) { const s = rows[j].s + fr * (rows[j + 1].s - rows[j].s); const p = G.pt(fc, s); vI[k] = add(p[0], p[1], i * dphi); }
+    return vI[k];
+  };
+  const cl = x => Math.min(0.98, Math.max(0.02, x));
+  const tri = (a, b, c) => idx.push(a, b, c);
+  const quad = (a, b) => { tri(a[0], b[0], b[1]); tri(a[0], b[1], a[1]); };
+  const P = [];
+  for (let j = j0; j < j1; j++) {
+    for (let i = 0; i < Nc; i++) {
+      const i1 = (i + 1) % Nc;
+      const v0 = val(i, j), v1 = val(i1, j), v2 = val(i1, j + 1), v3 = val(i, j + 1);
+      if (v0 < 0 && v1 < 0 && v2 < 0 && v3 < 0) continue;
+      P.length = 0;
+      if (v0 >= 0) P.push({ c: 0, v: [grid(i, j, 0), grid(i, j, 1)] });
+      if ((v0 >= 0) !== (v1 >= 0)) { const fr = cl(v0 / (v0 - v1)); P.push({ x: 1, v: [hx(i, j, fr, 0), hx(i, j, fr, 1)] }); }
+      if (v1 >= 0) P.push({ c: 1, v: [grid(i1, j, 0), grid(i1, j, 1)] });
+      if ((v1 >= 0) !== (v2 >= 0)) { const fr = cl(v1 / (v1 - v2)); P.push({ x: 1, v: [vx(i1, j, fr, 0), vx(i1, j, fr, 1)] }); }
+      if (v2 >= 0) P.push({ c: 2, v: [grid(i1, j + 1, 0), grid(i1, j + 1, 1)] });
+      if ((v2 >= 0) !== (v3 >= 0)) { const fr = cl(v3 / (v3 - v2)); P.push({ x: 1, v: [hx(i, j + 1, fr, 0), hx(i, j + 1, fr, 1)] }); }
+      if (v3 >= 0) P.push({ c: 3, v: [grid(i, j + 1, 0), grid(i, j + 1, 1)] });
+      if ((v3 >= 0) !== (v0 >= 0)) { const fr = cl(v0 / (v0 - v3)); P.push({ x: 1, v: [vx(i, j, fr, 0), vx(i, j, fr, 1)] }); }
+      const n = P.length;
+      for (let k = 1; k < n - 1; k++) { tri(P[0].v[1], P[k].v[1], P[k + 1].v[1]); tri(P[0].v[0], P[k + 1].v[0], P[k].v[0]); }
+      for (let k = 0; k < n; k++) {
+        const a = P[k], b = P[(k + 1) % n];
+        if (a.x && b.x) quad(a.v, b.v);
+        else if (j === j0 && a.c === 0 && b.c === 1) quad(a.v, b.v);
+        else if (j + 1 === j1 && !capTop && a.c === 2 && b.c === 3) quad(a.v, b.v);
+      }
+    }
+  }
+  if (capTop) { // hub disc: fan each face to its centre point
+    const w = rows[j1], cIn = add(0, w.zi, 0), cOut = add(0, w.zo, 0);
+    for (let i = 0; i < Nc; i++) {
+      const i1 = (i + 1) % Nc;
+      tri(grid(i, j1, 1), grid(i1, j1, 1), cOut);
+      tri(grid(i, j1, 0), cIn, grid(i1, j1, 0));
+    }
+  }
+  return { positions: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+
+// Edge-manifold + Euler check. Expected genus = (open ends - 1) + holes: a tube is 1 + holes, a cup is holes.
+function checkMesh(m, expectHoles, ends = 2) {
+  const V = m.positions.length / 3, F = m.indices.length / 3, ix = m.indices;
+  const E = new Map(); let bad = 0;
+  for (let t = 0; t < F; t++) {
+    for (let e = 0; e < 3; e++) {
+      const a = ix[3 * t + e], b = ix[3 * t + (e + 1) % 3];
+      const key = a < b ? a * V + b : b * V + a;
+      E.set(key, (E.get(key) || 0) + (a < b ? 1 : 1024));
+    }
+  }
+  for (const v of E.values()) if (v !== 1025) bad++;
+  const chi = V - E.size + F, genus = (2 - chi) / 2;
+  const expectGenus = ends - 1 + expectHoles;
+  const ok = bad === 0 && genus === expectGenus;
+  return { ok, V, F, E: E.size, badEdges: bad, genus, expectGenus };
+}
+
+function stlBinary(m, name) {
+  const F = m.indices.length / 3, buf = new ArrayBuffer(84 + 50 * F), dv = new DataView(buf);
+  const hdr = ('Tenebrae ' + name).slice(0, 79);
+  for (let i = 0; i < hdr.length; i++) dv.setUint8(i, hdr.charCodeAt(i) & 127);
+  dv.setUint32(80, F, true);
+  const p = m.positions, ix = m.indices;
+  let o = 84;
+  for (let t = 0; t < F; t++) {
+    const a = ix[3 * t] * 3, b = ix[3 * t + 1] * 3, c = ix[3 * t + 2] * 3;
+    const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+    const vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    dv.setFloat32(o, nx, true); dv.setFloat32(o + 4, ny, true); dv.setFloat32(o + 8, nz, true); o += 12;
+    for (const q of [a, b, c]) { dv.setFloat32(o, p[q], true); dv.setFloat32(o + 4, p[q + 1], true); dv.setFloat32(o + 8, p[q + 2], true); o += 12; }
+    o += 2;
+  }
+  return new Uint8Array(buf);
+}
+
+// Minimal store-only ZIP.
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) { // files: [{name, data: Uint8Array}]
+  const enc = s => new TextEncoder().encode(s);
+  const chunks = [], central = []; let off = 0;
+  for (const f of files) {
+    const nm = enc(f.name), crc = crc32(f.data), sz = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(8, 0, true);
+    h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true); h.setUint16(26, nm.length, true);
+    chunks.push(new Uint8Array(h.buffer), nm, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true);
+    c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true); c.setUint16(28, nm.length, true);
+    c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), nm);
+    off += 30 + nm.length + sz;
+  }
+  let csz = 0; for (const c of central) csz += c.length;
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, csz, true); e.setUint32(16, off, true);
+  return [...chunks, ...central, new Uint8Array(e.buffer)];
+}
+
+// ---------- Cross-shell checks ----------
+function clearanceGap(GA, GB) { // min radial gap between A's outer face and B's inner face where both exist
+  let gap = Infinity;
+  if (!GA.ok || !GB.ok) return gap;
+  const profB = z => GB.sph ? Math.sqrt(Math.max(0, GB.R * GB.R - z * z)) : GB.R;
+  const zcB = GB.cap ? GB.zTop - GB.t : Infinity;
+  for (const r of GA.rows) {
+    if (r.zo < GB.zBot) continue;
+    if (GB.cap) gap = Math.min(gap, zcB - r.zo);
+    if (r.zo > Math.min(GB.zTop, zcB)) continue;
+    gap = Math.min(gap, profB(r.zo) - r.ro);
+  }
+  return gap;
+}
+function sourceInside(G, src) {
+  if (!G.ok) return true;
+  const pts = [];
+  const h = src.size / 2;
+  if (src.type === 'point') pts.push([0, src.z]);
+  if (src.type === 'disc') pts.push([h, src.z]);
+  if (src.type === 'line') pts.push([0, src.z - src.length / 2], [0, src.z + src.length / 2]);
+  if (src.type === 'sphere') pts.push([h, src.z], [0, src.z + h], [0, src.z - h], [h * 0.7071, src.z + h * 0.7071]);
+  for (const [r, z] of pts) {
+    if (G.sph ? Math.hypot(r, z) >= G.R - 0.5 : r >= G.R - 0.5) return false;
+    if (G.cap && z >= G.zTop - G.t - 0.5) return false;
+  }
+  return true;
+}
+
+// Relative motion readout for azimuthal patterns.
+function beatInfo(patA, patB, mirror, rpmA, rpmB) {
+  if (patA.gen !== patB.gen || !GENS[patA.gen].azimuthal) return null;
+  const key = GENS[patA.gen].count;
+  const NA = Math.round(patA.params[key]), NB = (mirror ? -1 : 1) * Math.round(patB.params[key]);
+  const d = NA - NB;
+  if (d === 0) return { lobes: 0, rate: null };
+  return { lobes: Math.abs(d), rate: (NA * rpmA - NB * rpmB) / d, amp: Math.abs(NB / d) };
+}
+
+// Twist of the outer shell after which its look repeats (0 = rotationally symmetric, null = no short repeat).
+function twistPeriods(patB, capB) {
+  const gcd = (a, b) => b ? gcd(b, a % b) : a;
+  const per = p => {
+    if (!p || !GENS[p.gen].azimuthal) return null;
+    let n = Math.round(p.params[GENS[p.gen].count]);
+    if (p.gen === 'rings') n = gcd(Math.max(0, n), Math.max(0, Math.round(p.params.bridges)));
+    return n > 0 ? 360 / n : 0;
+  };
+  return { wall: per(patB), cap: per(capB) };
+}
+
+
+// ===== Tenebrae state: defaults, presets, effective patterns =====
+function mkShell(shape, R, t, zBot, zTop, rimBot, rimTop, gen, params, invert, cap) {
+  const p = genDefaults();
+  if (params) Object.assign(p[gen], params);
+  const c = { on: false, follow: true, hub: 22, gen: 'slots', params: { N: 18, twist: 2, duty: 0.38 } };
+  if (cap) Object.assign(c, cap);
+  const cp = genDefaults(); Object.assign(cp[c.gen], c.params);
+  return { shape, R, t, zBot, zTop, rimBot, rimTop, pattern: { gen, invert: !!invert, phase: 0, params: p },
+    cap: { on: c.on, follow: c.follow, hub: c.hub, pattern: { gen: c.gen, invert: false, phase: 0, params: cp } } };
+}
+function defaultState() {
+  const s = {
+    v: 2,
+    lamp: { mount: 'table' },
+    plan: { target: 'ceiling' },
+    fit: { auto: true, gap: 9 },
+    source: { type: 'disc', size: 1.4, length: 30, z: 0, emit: 'up', color: 'warm' },
+    shells: [
+      mkShell('cylinder', 50, 3, -25, 110, 25, 6, 'slots', { N: 36, duty: 0.45 }, false, { on: true, follow: true, hub: 24 }),
+      mkShell('cylinder', 62, 3, -34, 122, 34, 6, 'slots', { N: 39, duty: 0.45 }, false, { on: true, follow: true, hub: 24 }),
+    ],
+    link: { mode: 'linked', detune: 3, mirror: false },
+    motion: { mode: 'manual', offset: 0, snap: 0, bookmarks: [], rpmA: 0, rpmB: 0.2 },
+    process: { profile: 'FDM', minWeb: 2, minHole: 3, clearance: 0.4, split: true, seam: 4, fillSmall: true },
+    room: { W: 4200, D: 3600, H: 2600, lampZ: 900, exposure: 1, ambient: 0.02 },
+    res: 0.7,
+  };
+  fitOuter(s);
+  return s;
+}
+// Outer shell derived from the inner shell and one gap (radial, and axial above a cap).
+function fitOuter(s) {
+  const A = s.shells[0], B = s.shells[1], g = s.fit.gap;
+  B.shape = A.shape; B.t = A.t; B.R = A.R + A.t + g;
+  if (A.shape === 'sphere') {
+    const k = B.R / A.R;
+    B.zBot = A.zBot * k; B.rimBot = A.rimBot * k;
+    B.zTop = A.cap.on ? A.zTop + g + B.t : A.zTop * k; B.rimTop = A.cap.on ? A.rimTop : A.rimTop * k;
+  } else {
+    B.zBot = A.zBot - g; B.rimBot = A.rimBot + g;
+    B.zTop = A.zTop + g + (A.cap.on ? B.t : 0); B.rimTop = A.cap.on ? A.rimTop : A.rimTop + g;
+  }
+  B.cap.on = A.cap.on; B.cap.hub = A.cap.hub; B.cap.follow = A.cap.follow;
+}
+function uplight(gen, params, link, cap) {
+  const s = defaultState();
+  s.shells[0] = mkShell('cylinder', 50, 3, -25, 110, 25, 6, gen, params, false, Object.assign({ on: true, follow: true, hub: 24 }, cap || {}));
+  s.shells[1] = mkShell('cylinder', 62, 3, -34, 122, 34, 6, gen, params, false, { on: true, follow: true, hub: 24 });
+  s.link = Object.assign({ mode: 'linked', detune: 3, mirror: false }, link || {});
+  fitOuter(s);
+  return s;
+}
+function helixState() {
+  const s = defaultState();
+  s.fit.auto = false; s.plan.target = 'walls';
+  s.shells[0] = mkShell('cylinder', 58, 3.5, -90, 90, 10, 10, 'slots', { N: 40, duty: 0.4 });
+  s.shells[1] = mkShell('cylinder', 70, 3.5, -96, 96, 10, 10, 'slots', { N: 43, duty: 0.4 });
+  return s;
+}
+const PRESETS = [
+  { name: 'Table uplight, auto-fitted (default)', group: 'Table uplights', make: () => defaultState() },
+  { name: 'Uplight: phyllotaxis dots', group: 'Table uplights', make: () => uplight('phyllo', { N: 260, size: 0.6 }, { detune: 13 }) },
+  { name: 'Uplight: Voronoi cells', group: 'Table uplights', make: () => { const s = uplight('voronoi', { N: 150, web: 3, jitter: 0.6, seed: 7 }, { mode: 'independent' });
+    Object.assign(s.shells[1].pattern.params.voronoi, { N: 170, seed: 21 }); return s; } },
+  { name: 'Uplight: wavy rings', group: 'Table uplights', make: () => uplight('rings', { pitch: 8, K: 6, amp: 2, duty: 0.45, bridges: 12, bridgeW: 3 }, { detune: 1 }) },
+  { name: 'Uplight: counter-spirals', group: 'Table uplights', make: () => uplight('slots', { N: 30, twist: 1.2, duty: 0.45 }, { detune: 0, mirror: true }) },
+  { name: 'Uplight: superformula stars', group: 'Table uplights', make: () => uplight('superformula', { N: 14, rows: 5, m: 5, n1: 0.8, n2: 1.2, n3: 1.2, size: 0.7 }, { detune: 2 }) },
+  { name: 'Wall wash: filament and slots', group: 'Other targets', source: { type: 'line', size: 1.4, length: 30, z: 0, emit: 'omni', color: 'warm' }, make: () => { const s = defaultState();
+    s.plan.target = 'walls';
+    s.shells[0] = mkShell('cylinder', 55, 3, -80, 80, 10, 10, 'slots', { N: 24, duty: 0.42 });
+    s.shells[1] = mkShell('cylinder', 67, 3, -89, 89, 19, 19, 'slots', { N: 26, duty: 0.42 });
+    s.link = { mode: 'linked', detune: 2, mirror: false }; fitOuter(s); return s; } },
+  { name: 'Helix moiré, cylinders', make: () => helixState() },
+  { name: 'Phyllotaxis globe', make: () => { const s = defaultState(); s.fit.auto = false; s.plan.target = 'everywhere';
+    s.shells[0] = mkShell('sphere', 58, 3.5, -46, 50, 6, 6, 'phyllo', { N: 360, size: 0.6 });
+    s.shells[1] = mkShell('sphere', 74, 3.5, -58, 64, 6, 6, 'phyllo', { N: 380, size: 0.6 });
+    s.link = { mode: 'linked', detune: 21, mirror: false }; return s; } },
+  { name: 'Rings over Voronoi', make: () => { const s = defaultState(); s.fit.auto = false; s.plan.target = 'walls';
+    s.shells[0] = mkShell('cylinder', 56, 3.5, -85, 85, 9, 9, 'rings', { pitch: 7, K: 8, amp: 1.5, duty: 0.45, bridges: 14, bridgeW: 3 });
+    s.shells[1] = mkShell('cylinder', 70, 3.5, -92, 92, 9, 9, 'voronoi', { N: 220, web: 3.2, jitter: 0.7, seed: 11 });
+    s.link = { mode: 'independent', detune: 0, mirror: false }; return s; } },
+  { name: 'Counter-spirals', make: () => { const s = defaultState(); s.fit.auto = false; s.plan.target = 'walls';
+    s.shells[0] = mkShell('cylinder', 58, 3.5, -90, 90, 10, 10, 'slots', { N: 30, twist: 1.1, duty: 0.42 });
+    s.shells[1] = mkShell('cylinder', 70, 3.5, -96, 96, 10, 10, 'slots', { N: 30, twist: 1.1, duty: 0.42 });
+    s.link = { mode: 'linked', detune: 0, mirror: true }; return s; } },
+  { name: 'Uplight: slots, 5 mm cap gap', group: 'Table uplights', source: { type: 'disc', size: 1.4, length: 30, z: 0, emit: 'up', color: 'warm' }, make: () => { const s = defaultState(); s.fit.auto = false;
+    s.shells[0] = mkShell('cylinder', 50, 3, -25, 110, 25, 6, 'slots', { N: 36, duty: 0.45 }, false, { on: true, follow: true, hub: 24 });
+    s.shells[1] = mkShell('cylinder', 62, 3, -30, 118, 30, 6, 'slots', { N: 39, duty: 0.45 }, false, { on: true, follow: true, hub: 24 });
+    s.link = { mode: 'linked', detune: 3, mirror: false }; return s; } },
+  { name: 'Superformula lantern', make: () => { const s = defaultState(); s.fit.auto = false; s.plan.target = 'everywhere';
+    s.shells[0] = mkShell('sphere', 60, 3.5, -48, 52, 6, 6, 'superformula', { N: 16, rows: 6, m: 5, n1: 0.8, n2: 1.2, n3: 1.2, size: 0.66 });
+    s.shells[1] = mkShell('sphere', 76, 3.5, -60, 66, 6, 6, 'voronoi', { N: 150, web: 3, jitter: 0.5, seed: 3 });
+    s.link = { mode: 'independent', detune: 0, mirror: false }; return s; } },
+];
+function effectivePatterns(st) { return linkedPair(st, sh => sh.pattern); }
+function effectiveCaps(st) { return linkedPair(st, sh => sh.cap.follow ? sh.pattern : sh.cap.pattern); }
+function capFollows(st, k) { return (st.link.mode === 'linked' ? st.shells[0] : st.shells[k]).cap.follow; }
+// Load a saved design. Caps saved before "follow" existed kept their own pattern.
+function loadDesign(raw) {
+  const S = mergeDeep(defaultState(), raw);
+  if (raw && !raw.fit) S.fit.auto = false;
+  (raw && raw.shells || []).forEach((sh, k) => { if (S.shells[k] && sh && sh.cap && !('follow' in sh.cap)) S.shells[k].cap.follow = false; });
+  return S;
+}
+function linkedPair(st, pick) {
+  const A = pick(st.shells[0]);
+  let B = pick(st.shells[1]);
+  if (st.link.mode === 'linked') {
+    const key = GENS[A.gen].count, def = GENS[A.gen].params.find(q => q.k === key);
+    const params = JSON.parse(JSON.stringify(A.params));
+    params[A.gen][key] = Math.max(def.min, Math.round(A.params[A.gen][key] + st.link.detune));
+    B = { gen: A.gen, invert: A.invert, phase: A.phase, params };
+  }
+  const flat = p => ({ gen: p.gen, invert: p.invert, phase: p.phase, params: p.params[p.gen] });
+  return [flat(A), flat(B)];
+}
+function mergeDeep(base, over) {
+  if (Array.isArray(base)) return Array.isArray(over) ? over.map((v, i) => i < base.length ? mergeDeep(base[i], v) : v) : base;
+  if (base && typeof base === 'object') {
+    const o = { ...base };
+    if (over && typeof over === 'object') for (const k in over) o[k] = k in base ? mergeDeep(base[k], over[k]) : over[k];
+    return o;
+  }
+  return (over === undefined || over === null || typeof over !== typeof base) ? base : over;
+}
+
+// ===== Tenebrae renderer: WebGL2, per-pixel ray test through both shells =====
+const SCENE_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+uniform mat4 uVP; uniform vec3 uOffset; uniform vec2 uJitter;
+out vec3 vW; out vec3 vN;
+void main(){ vec3 w = aPos + uOffset; vW = w; vN = aNrm; vec4 c = uVP * vec4(w, 1.0); c.xy += uJitter * c.w; gl_Position = c; }`;
+
+const SCENE_FS = `#version 300 es
+precision highp float; precision highp int;
+in vec3 vW; in vec3 vN; out vec4 outC;
+struct Shell { float shape; float R; float T; float zBot; float zTop; float sLo; float sMid; float sHi; float n1; float n2; float rows; float cols; float rot; float cap; float sC; float rhoC; };
+uniform Shell uS[2];
+uniform sampler2D uMaskA; uniform sampler2D uMaskB;
+uniform vec3 uLamp; uniform int uKind; uniform int uShell; uniform vec3 uAlbedo;
+uniform int uSrcType; uniform float uSrcSize; uniform float uSrcLen; uniform float uSrcZ; uniform int uEmit;
+uniform int uSamples; uniform float uFrame; uniform float uPower; uniform vec3 uLightCol; uniform float uAmbient;
+uniform int uDirect; uniform float uExposure;
+const float TAU = 6.283185307179586;
+float maskVal(int k, vec2 uv){ return k == 0 ? textureLod(uMaskA, uv, 0.0).r : textureLod(uMaskB, uv, 0.0).r; }
+bool solidAt(int k, vec3 p){
+  float rho = length(p.xy); float Ro = uS[k].R + uS[k].T;
+  float s;
+  if (uS[k].cap > 0.5 && p.z > 0.0 && uS[k].zTop * rho < uS[k].rhoC * p.z) s = uS[k].sC + uS[k].rhoC - uS[k].zTop * rho / p.z;
+  else s = uS[k].shape < 0.5 ? Ro * p.z / max(rho, 1e-4) : Ro * atan(p.z, rho);
+  if (s <= uS[k].sLo || s >= uS[k].sHi) return true;
+  float row = s < uS[k].sMid ? (s - uS[k].sLo) / (uS[k].sMid - uS[k].sLo) * uS[k].n1
+                             : uS[k].n1 + (s - uS[k].sMid) / (uS[k].sHi - uS[k].sMid) * uS[k].n2;
+  float c = fract((atan(p.y, p.x) - uS[k].rot) / TAU) * uS[k].cols;
+  return maskVal(k, vec2((c + 0.5) / uS[k].cols, (row + 0.5) / uS[k].rows)) >= 0.5;
+}
+float hitShell(int k, int f, vec3 S, vec3 D){
+  float Rs = uS[k].R + (f == 1 ? uS[k].T : 0.0);
+  if (uS[k].shape < 0.5) {
+    float a = dot(D.xy, D.xy); if (a < 1e-9) return -1.0;
+    float b = dot(S.xy, D.xy), c = dot(S.xy, S.xy) - Rs * Rs, disc = b * b - a * c;
+    if (disc < 0.0) return -1.0; return (-b + sqrt(disc)) / a;
+  }
+  float b = dot(S, D), c = dot(S, S) - Rs * Rs, disc = b * b - c;
+  if (disc < 0.0) return -1.0; return -b + sqrt(disc);
+}
+float transmit(vec3 S, vec3 P){
+  vec3 d = P - S; float L = length(d); vec3 D = d / L;
+  for (int k = 0; k < 2; k++) for (int f = 0; f < 2; f++) {
+    float l = hitShell(k, f, S, D);
+    bool capped = uS[k].cap > 0.5;
+    if (capped) {
+      float zc = uS[k].zTop - (f == 0 ? uS[k].T : 0.0);
+      if (l <= 0.0 || S.z + l * D.z > zc) { if (D.z <= 1e-6) continue; l = (zc - S.z) / D.z; }
+    }
+    if (l > 0.0 && l < L - 0.05) {
+      vec3 H = S + l * D;
+      bool exists = capped ? H.z >= uS[k].zBot : (H.z >= uS[k].zBot && H.z <= uS[k].zTop);
+      if (exists && solidAt(k, H)) return 0.0;
+    }
+  }
+  return 1.0;
+}
+uint hash(uint x){ x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }
+vec3 rand3(int i){
+  uvec2 px = uvec2(gl_FragCoord.xy);
+  uint h = hash(px.x * 1973u + px.y * 9277u + 26699u);
+  vec3 cp = vec3(float(h & 1023u), float((h >> 10) & 1023u), float((h >> 20) & 1023u)) / 1024.0;
+  float n = uFrame * float(uSamples) + float(i);
+  return fract(cp + n * vec3(0.8191725134, 0.6710436067, 0.5497004779));
+}
+vec3 srcPoint(int i){
+  if (uSrcType == 0) return vec3(0.0, 0.0, uSrcZ);
+  vec3 r = rand3(i);
+  if (uSrcType == 1) { float rr = 0.5 * uSrcSize * sqrt(r.x), a = TAU * r.y; return vec3(rr * cos(a), rr * sin(a), uSrcZ); }
+  if (uSrcType == 2) return vec3(0.0, 0.0, uSrcZ + (r.x - 0.5) * uSrcLen);
+  float z = 2.0 * r.x - 1.0, a = TAU * r.y, rr = 0.5 * uSrcSize * pow(r.z, 1.0 / 3.0), q = sqrt(max(0.0, 1.0 - z * z));
+  return vec3(q * cos(a) * rr, q * sin(a) * rr, uSrcZ + z * rr);
+}
+float emitW(vec3 D){ if (uEmit == 0) return 1.0; if (uEmit == 1) return 2.0 * max(0.0, D.z); return 2.0 * max(0.0, -D.z); }
+vec3 finish(vec3 c){ if (uDirect == 1) return pow(1.0 - exp(-c * uExposure), vec3(1.0 / 2.2)); return min(c, vec3(400.0)); }
+void main(){
+  vec3 P = vW - uLamp;
+  if (uKind == 1 && !solidAt(uShell, P)) discard;
+  if (uKind == 2) { outC = vec4(finish(uLightCol * 40.0), 1.0); return; }
+  vec3 N = normalize(vN);
+  int K = uSrcType == 0 ? 1 : uSamples;
+  float E = 0.0;
+  for (int i = 0; i < 16; i++) {
+    if (i >= K) break;
+    vec3 S = srcPoint(i), d = P - S; float L2 = dot(d, d); vec3 D = d * inversesqrt(L2);
+    float recv = max(0.0, dot(N, -D)); if (recv <= 0.0) continue;
+    float w = emitW(D); if (w <= 0.0) continue;
+    E += transmit(S, P) * w * recv / L2;
+  }
+  E *= uPower / float(K);
+  outC = vec4(finish(uAlbedo * (E * uLightCol + uAmbient)), 1.0);
+}`;
+
+const QUAD_VS = `#version 300 es
+out vec2 vUV; void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUV = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+const ACC_FS = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 o; uniform sampler2D uTex; void main(){ o = texture(uTex, vUV); }`;
+const DISP_FS = `#version 300 es
+precision highp float; in vec2 vUV; out vec4 o; uniform sampler2D uTex; uniform float uInv; uniform float uExposure;
+void main(){ vec3 c = texture(uTex, vUV).rgb * uInv; o = vec4(pow(1.0 - exp(-c * uExposure), vec3(1.0 / 2.2)), 1.0); }`;
+
+const M4 = {
+  persp(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; },
+  look(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2]; let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+  },
+  mul(a, b) { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; },
+};
+
+function createRenderer(canvas) {
+  const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, premultipliedAlpha: false });
+  if (!gl) return null;
+  const floatOK = !!gl.getExtension('EXT_color_buffer_float');
+  const compile = (vs, fs) => {
+    const p = gl.createProgram();
+    for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+      const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      gl.attachShader(p, s);
+    }
+    gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const U = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name; U[nm] = gl.getUniformLocation(p, nm); }
+    return { p, U };
+  };
+  const scene = compile(SCENE_VS, SCENE_FS), acc = compile(QUAD_VS, ACC_FS), disp = compile(QUAD_VS, DISP_FS);
+  const vao = gl.createVertexArray();
+  const meshes = { room: [], lamp: [[], []], emitter: null };
+  const tex = [gl.createTexture(), gl.createTexture()];
+  const shellU = [null, null];
+
+  function mesh(pos, nrm, idx) {
+    const v = gl.createVertexArray(); gl.bindVertexArray(v);
+    const b1 = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b1); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    const b2 = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b2); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nrm), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    const b3 = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b3); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    return { v, n: idx.length, free() { gl.deleteVertexArray(v); gl.deleteBuffer(b1); gl.deleteBuffer(b2); gl.deleteBuffer(b3); } };
+  }
+
+  function setRoom(W, D, H) {
+    meshes.room.forEach(m => m.m.free()); meshes.room = [];
+    const x0 = -W / 2, x1 = W / 2, y0 = -D / 2, y1 = D / 2;
+    const face = (a, b, c, d, n, alb) => meshes.room.push({ m: mesh([...a, ...b, ...c, ...d], [...n, ...n, ...n, ...n], [0, 1, 2, 0, 2, 3]), alb });
+    const wall = [0.80, 0.79, 0.76];
+    face([x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0], [0, 0, 1], [0.42, 0.38, 0.34]);
+    face([x0, y0, H], [x0, y1, H], [x1, y1, H], [x1, y0, H], [0, 0, -1], [0.86, 0.86, 0.85]);
+    face([x0, y0, 0], [x0, y0, H], [x1, y0, H], [x1, y0, 0], [0, 1, 0], wall);
+    face([x0, y1, 0], [x1, y1, 0], [x1, y1, H], [x0, y1, H], [0, -1, 0], wall);
+    face([x0, y0, 0], [x0, y1, 0], [x0, y1, H], [x0, y0, H], [1, 0, 0], wall);
+    face([x1, y0, 0], [x1, y0, H], [x1, y1, H], [x1, y1, 0], [-1, 0, 0], wall);
+  }
+
+  // Shell preview surfaces (smooth faces; holes come from the mask in the shader).
+  function setShell(k, G) {
+    meshes.lamp[k].forEach(m => m.m.free()); meshes.lamp[k] = [];
+    const U = { shape: 0, R: 1, T: 0, zBot: 1, zTop: 0, sLo: 0, sMid: 1, sHi: 2, n1: 1, n2: 0, rows: 1, cols: 1, rot: 0, cap: 0, sC: 0, rhoC: 0 };
+    gl.bindTexture(gl.TEXTURE_2D, tex[k]); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    if (!G || !G.ok) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array([255]));
+      shellU[k] = U; texParams(); return;
+    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, G.Nc, G.Nb, 0, gl.RED, gl.UNSIGNED_BYTE, G.tex); texParams();
+    Object.assign(U, { shape: G.sph ? 1 : 0, R: G.R, T: G.t, zBot: G.zBot, zTop: G.zTop, sLo: G.sLo, sMid: G.sMid, sHi: G.sHi, n1: G.n1, n2: G.n2, rows: G.Nb, cols: G.Nc, cap: G.cap ? 1 : 0, sC: G.sC, rhoC: G.rhoC });
+    shellU[k] = U;
+    const rows = G.rows, step = Math.max(1, Math.floor(G.Nb / 110)), pick = [];
+    for (let j = 0; j < rows.length; j++) if (rows[j].band < 0 || rows[j].band % step === 0 || j === rows.length - 1) pick.push(rows[j]);
+    const C = 200, last = pick.length - 1;
+    for (const fc of [0, 1]) {
+      const pos = [], nrm = [], idx = [], sg = fc ? 1 : -1;
+      const P = j => fc ? [pick[j].ro, pick[j].zo] : [pick[j].ri, pick[j].zi];
+      pick.forEach((r, j) => {
+        const [rho, z] = P(j), a0 = P(Math.max(0, j - 1)), a1 = P(Math.min(last, j + 1));
+        let tr = a1[0] - a0[0], tz = a1[1] - a0[1]; const tl = Math.hypot(tr, tz) || 1; tr /= tl; tz /= tl;
+        const nr = sg * tz, nz = -sg * tr; // outward for the outer face, towards the light for the inner face
+        for (let i = 0; i <= C; i++) {
+          const a = i / C * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+          pos.push(rho * c, rho * s, z); nrm.push(nr * c, nr * s, nz);
+          if (j > 0 && i < C) { const a0i = (j - 1) * (C + 1) + i, b0 = j * (C + 1) + i; idx.push(a0i, a0i + 1, b0 + 1, a0i, b0 + 1, b0); }
+        }
+      });
+      if (G.cap) { // hub disc
+        const cz = P(last)[1], ci = pos.length / 3; pos.push(0, 0, cz); nrm.push(0, 0, sg);
+        for (let i = 0; i < C; i++) idx.push(last * (C + 1) + i, last * (C + 1) + i + 1, ci);
+      }
+      meshes.lamp[k].push({ m: mesh(pos, nrm, idx), kind: 1 });
+    }
+    for (const [r, nz] of G.cap ? [[rows[0], -1]] : [[rows[0], -1], [rows[rows.length - 1], 1]]) {
+      const pos = [], nrm = [], idx = [];
+      for (let i = 0; i <= C; i++) {
+        const a = i / C * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+        pos.push(r.ri * c, r.ri * s, r.zi, r.ro * c, r.ro * s, r.zo); nrm.push(0, 0, nz, 0, 0, nz);
+        if (i < C) idx.push(2 * i, 2 * i + 1, 2 * i + 3, 2 * i, 2 * i + 3, 2 * i + 2);
+      }
+      meshes.lamp[k].push({ m: mesh(pos, nrm, idx), kind: 0 });
+    }
+  }
+  function texParams() {
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  function setEmitter(src) {
+    if (meshes.emitter) meshes.emitter.free();
+    let rx = 1.2, rz = 1.2;
+    if (src.type === 'disc') { rx = Math.max(0.8, src.size / 2); rz = 0.5; }
+    if (src.type === 'line') { rx = 0.8; rz = src.length / 2; }
+    if (src.type === 'sphere') { rx = rz = src.size / 2; }
+    const pos = [], nrm = [], idx = [], A = 16, B = 10;
+    for (let b = 0; b <= B; b++) for (let a = 0; a <= A; a++) {
+      const th = b / B * Math.PI, ph = a / A * Math.PI * 2;
+      const x = Math.sin(th) * Math.cos(ph), y = Math.sin(th) * Math.sin(ph), z = Math.cos(th);
+      pos.push(x * rx, y * rx, z * rz + src.z); nrm.push(x, y, z);
+      if (a < A && b < B) { const i0 = b * (A + 1) + a, i1 = i0 + A + 1; idx.push(i0, i1, i0 + 1, i0 + 1, i1, i1 + 1); }
+    }
+    meshes.emitter = mesh(pos, nrm, idx);
+  }
+
+  // Targets
+  let W = 0, H = 0, fb = null;
+  function targets(w, h) {
+    if (w === W && h === H && fb) return; W = w; H = h;
+    if (fb) { gl.deleteFramebuffer(fb.f); gl.deleteFramebuffer(fb.a); gl.deleteTexture(fb.ft); gl.deleteTexture(fb.at); gl.deleteRenderbuffer(fb.d); }
+    if (!floatOK) { fb = null; return; }
+    const mk = () => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, w, h); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); return t; };
+    const ft = mk(), at = mk(), d = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, d); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ft, 0); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, d);
+    const a = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, a); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, at, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    fb = { f, a, ft, at, d };
+  }
+
+  // P: {vp, lamp:[x,y,z], rot:[a,b], src, samples, frame, power, lightCol, ambient, exposure, jitter, count}
+  function draw(P) {
+    const direct = !fb;
+    gl.useProgram(scene.p); const U = scene.U;
+    gl.uniformMatrix4fv(U.uVP, false, P.vp); gl.uniform2fv(U.uJitter, P.jitter);
+    gl.uniform3fv(U.uLamp, P.lamp);
+    for (let k = 0; k < 2; k++) {
+      const s = shellU[k]; if (!s) continue;
+      for (const key in s) { const loc = U[`uS[${k}].${key}`]; if (loc) gl.uniform1f(loc, key === 'rot' ? P.rot[k] : s[key]); }
+    }
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex[0]); gl.uniform1i(U.uMaskA, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex[1]); gl.uniform1i(U.uMaskB, 1);
+    const st = { point: 0, disc: 1, line: 2, sphere: 3 }[P.src.type];
+    gl.uniform1i(U.uSrcType, st); gl.uniform1f(U.uSrcSize, P.src.size); gl.uniform1f(U.uSrcLen, P.src.length); gl.uniform1f(U.uSrcZ, P.src.z);
+    gl.uniform1i(U.uEmit, { omni: 0, up: 1, down: 2 }[P.src.emit]);
+    gl.uniform1i(U.uSamples, P.samples); gl.uniform1f(U.uFrame, P.frame); gl.uniform1f(U.uPower, P.power);
+    gl.uniform3fv(U.uLightCol, P.lightCol); gl.uniform1f(U.uAmbient, P.ambient);
+    gl.uniform1i(U.uDirect, direct ? 1 : 0); gl.uniform1f(U.uExposure, P.exposure);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, direct ? null : fb.f);
+    gl.viewport(0, 0, W, H); gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const drawM = (m, kind, shell, alb, off) => {
+      gl.uniform1i(U.uKind, kind); gl.uniform1i(U.uShell, shell); gl.uniform3fv(U.uAlbedo, alb); gl.uniform3fv(U.uOffset, off);
+      gl.bindVertexArray(m.v); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0);
+    };
+    for (const r of meshes.room) drawM(r.m, 0, 0, r.alb, [0, 0, 0]);
+    for (let k = 0; k < 2; k++) for (const s of meshes.lamp[k]) drawM(s.m, s.kind, k, [0.1, 0.1, 0.1], P.lamp);
+    if (meshes.emitter) drawM(meshes.emitter, 2, 0, [1, 1, 1], P.lamp);
+    gl.bindVertexArray(null);
+    if (direct) return;
+    // accumulate
+    gl.disable(gl.DEPTH_TEST); gl.bindFramebuffer(gl.FRAMEBUFFER, fb.a);
+    if (P.count === 0) { gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); }
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(acc.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fb.ft); gl.uniform1i(acc.U.uTex, 0);
+    gl.bindVertexArray(vao); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.disable(gl.BLEND);
+    present(P.count + 1, P.exposure);
+  }
+  function present(n, exposure) {
+    if (!fb) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+    gl.useProgram(disp.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fb.at);
+    gl.uniform1i(disp.U.uTex, 0); gl.uniform1f(disp.U.uInv, 1 / n); gl.uniform1f(disp.U.uExposure, exposure);
+    gl.bindVertexArray(vao); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.bindVertexArray(null);
+  }
+  return { gl, floatOK, setRoom, setShell, setEmitter, targets, draw, present, size: () => [W, H] };
+}
+
+// ===== Tenebrae UI =====
+(function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, attrs = {}, ...kids) => {
+    const e = document.createElement(tag);
+    for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k]); }
+    for (const c of kids) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c));
+    return e;
+  };
+  const KEY = 'tenebrae.design.v1', OLD_KEY = 'umbra.design.v1';
+  let S = defaultState();
+  try { const j = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); if (j) S = loadDesign(JSON.parse(j)); } catch (e) { }
+  const UIKEY = 'tenebrae.ui.v1', OLD_UIKEY = 'umbra.ui.v1';
+  const UI = { locks: [], level: 'basic', open: { lamp: true, target: true, light: true, shells: false, pattern: false, link: false, motion: false, make: false, view: false }, playing: false, animA: 0, animB: 0, view: 'room', sums: [] };
+  try { const j = JSON.parse(localStorage.getItem(UIKEY) || localStorage.getItem(OLD_UIKEY) || 'null'); if (j) { UI.level = j.level === 'advanced' ? 'advanced' : 'basic'; Object.assign(UI.open, j.open || {}); if (Array.isArray(j.locks)) UI.locks = j.locks; } } catch (e) { }
+  let G = [null, null], notes = [];
+  const downloads = (window.claude && window.claude.use) ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+
+  // ---------- controls ----------
+  let uid = 0;
+  function num(v, step) { const d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2; return (+v).toFixed(d); }
+  function slider(parent, label, obj, key, min, max, step, kind, opts = {}) {
+    const id = 'c' + (uid++);
+    const rng = el('input', { type: 'range', id, min, max, step, value: obj[key], 'aria-label': label });
+    const box = el('input', { type: 'number', min, max, step, value: num(obj[key], step), 'aria-label': label + ' value' });
+    const set = (v, commit) => {
+      v = Math.min(max, Math.max(min, +v)); if (!isFinite(v)) return;
+      if (opts.snap) v = opts.snap(v);
+      obj[key] = v; rng.value = v; box.value = num(v, step);
+      if (opts.after) opts.after(v);
+      changed(kind, !commit);
+    };
+    rng.addEventListener('input', () => set(rng.value, false));
+    rng.addEventListener('change', () => set(rng.value, true));
+    box.addEventListener('change', () => set(box.value, true));
+    const row = el('div', { class: 'ctl' + (opts.lock ? ' lk' : '') }, el('label', { for: id }, label), box);
+    if (opts.lock) {
+      const on = () => UI.locks.includes(opts.lock);
+      const lb = el('button', { class: 'lock', type: 'button', 'aria-pressed': on() ? 'true' : 'false', 'aria-label': 'Lock ' + label + ' against randomize', title: 'Lock against randomize' });
+      lb.innerHTML = LOCK_SVG;
+      lb.addEventListener('click', () => { if (on()) UI.locks = UI.locks.filter(x => x !== opts.lock); else UI.locks.push(opts.lock); lb.setAttribute('aria-pressed', on() ? 'true' : 'false'); saveUI(); });
+      row.append(lb);
+    }
+    row.append(rng); parent.append(row);
+    return { set };
+  }
+  const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  function select(parent, label, obj, key, options, kind, rerender, after) {
+    const id = 'c' + (uid++);
+    const s = el('select', { id }, ...options.map(([v, t]) => el('option', { value: v, selected: obj[key] === v ? '' : false }, t)));
+    s.addEventListener('change', () => { obj[key] = s.value; if (after) after(s.value); changed(kind, false); if (rerender) renderSidebar(); });
+    parent.append(el('div', { class: 'ctl sel' }, el('label', { for: id }, label), s));
+  }
+  function check(parent, label, obj, key, kind, rerender, after) {
+    const id = 'c' + (uid++);
+    const c = el('input', { type: 'checkbox', id, checked: obj[key] ? '' : false });
+    c.addEventListener('change', () => { obj[key] = c.checked; if (after) after(c.checked); changed(kind, false); if (rerender) renderSidebar(); });
+    parent.append(el('div', { class: 'ctl chk' }, c, el('label', { for: id }, label)));
+  }
+  function note(parent, text, cls = '') { const n = el('p', { class: 'hint ' + cls }, text); parent.append(n); return n; }
+  const ADV = () => UI.level === 'advanced';
+  function section(key, n, title, sum, build) {
+    const d = el('details', { open: UI.open[key] ? '' : false });
+    d.addEventListener('toggle', () => { UI.open[key] = d.open; saveUI(); });
+    const s = el('span', { class: 'sum' });
+    UI.sums.push(() => { s.textContent = sum(); });
+    const body = el('div', { class: 'sec' });
+    d.append(el('summary', {}, el('span', { class: 'step' }, n ? el('i', { 'aria-hidden': 'true' }, String(n)) : null, title), s), body);
+    build(body); $('#side').append(d);
+  }
+  function refreshSummaries() { (UI.sums || []).forEach(f => f()); }
+  function saveUI() { try { localStorage.setItem(UIKEY, JSON.stringify({ level: UI.level, open: UI.open, locks: UI.locks })); } catch (e) { } }
+
+  // ---------- decisions and their knock-on settings ----------
+  const TARGETS = {
+    ceiling: { label: 'Ceiling and upper walls', apply: () => { setDie('up'); setCaps(true); return 'Emitter set to an upward LED die; top caps on.'; },
+      why: 'An upward die gives the crispest shadows. Top caps pattern the ceiling instead of throwing a bright disc.' },
+    walls: { label: 'Walls at lamp height', apply: () => { S.source.type = 'line'; S.source.emit = 'omni'; setCaps(false); return 'Emitter set to a vertical filament; caps off.'; },
+      why: 'A vertical filament lights all round. Vertical slots stay sharp; horizontal features blur along its length.' },
+    floor: { label: 'Floor and lower walls', apply: () => { setDie('down'); setCaps(false); return 'Emitter set to a downward LED die; caps off.'; },
+      why: 'A downward die. Bottom caps are not built yet, so the open bottom throws a bright disc on the floor.' },
+    everywhere: { label: 'Everywhere', apply: () => { setDie('omni'); setCaps(true); return 'Emitter set to all directions (two dies back to back); top caps on.'; },
+      why: 'Two dies back to back approximate all-round light, with a dim band at lamp height.' },
+  };
+  function setDie(emit) { if (S.source.type !== 'disc' && S.source.type !== 'point') { S.source.type = 'disc'; S.source.size = 1.4; } S.source.emit = emit; R && R.setEmitter(S.source); }
+  function setCaps(on) { S.shells.forEach(sh => { sh.cap.on = on; }); }
+  const MOUNT_Z = { table: 900, pendant: 1900 };
+  const EMIT = { point: 'Point', disc: 'LED die', line: 'Filament', sphere: 'Frosted bulb' };
+  const FACING = { up: 'facing up', down: 'facing down', omni: 'all round' };
+  function lightSummary() {
+    const s = S.source;
+    return s.type === 'line' ? `Filament, ${s.length} mm` : s.type === 'point' ? `Point, ${FACING[s.emit]}` : `${EMIT[s.type]} ${num(s.size, 0.1)} mm, ${FACING[s.emit]}`;
+  }
+
+  // ---------- sidebar ----------
+  function renderSidebar() {
+    const side = $('#side'), top = side.scrollTop; side.innerHTML = ''; uid = 0; UI.sums = [];
+    const lv = (v, t) => el('button', { 'aria-pressed': UI.level === v ? 'true' : 'false', onclick: () => { UI.level = v; saveUI(); renderSidebar(); } }, t);
+    side.append(el('div', { class: 'level' }, el('div', { class: 'seg', role: 'group', 'aria-label': 'Detail level' }, lv('basic', 'Basic'), lv('advanced', 'Advanced')),
+      el('p', { class: 'hint' }, ADV() ? 'Every parameter is shown.' : 'Work down the steps. Each shows only the settings that shape the look.')));
+
+    section('lamp', 1, 'Lamp', () => `${S.lamp.mount === 'pendant' ? 'Pendant' : 'Table lamp'}, light at ${Math.round(S.room.lampZ)} mm`, b => {
+      select(b, 'Mount', S.lamp, 'mount', [['table', 'Table lamp'], ['pendant', 'Pendant']], 'room', true, v => { S.room.lampZ = MOUNT_Z[v]; toast(`Light height set to ${MOUNT_Z[v]} mm above the floor.`); });
+      if (ADV()) slider(b, 'Light height above floor (mm)', S.room, 'lampZ', 150, 4800, 10, 'room');
+    });
+
+    section('target', 2, 'Target', () => TARGETS[S.plan.target].label, b => {
+      select(b, 'Lands on', S.plan, 'target', Object.entries(TARGETS).map(([k, v]) => [k, v.label]), 'geom', true, v => { toast(TARGETS[v].apply()); R && R.setEmitter(S.source); });
+      note(b, TARGETS[S.plan.target].why);
+    });
+
+    section('light', 3, 'Light', lightSummary, b => {
+      select(b, 'Emitter', S.source, 'type', [['point', 'Point (ideal)'], ['disc', 'LED die or COB'], ['line', 'Filament'], ['sphere', 'Frosted bulb']], 'light', true);
+      if (S.source.type === 'disc' || S.source.type === 'sphere') slider(b, S.source.type === 'disc' ? 'Emitter diameter (mm)' : 'Bulb diameter (mm)', S.source, 'size', 0.5, 80, 0.1, 'light', { after: sharpHint });
+      if (S.source.type === 'line') slider(b, 'Filament length (mm)', S.source, 'length', 4, 80, 1, 'light');
+      UI.sharp = note(b, ''); sharpHint();
+      if (ADV()) {
+        select(b, 'Emission', S.source, 'emit', [['omni', 'All directions'], ['up', 'Upward half'], ['down', 'Downward half']], 'light');
+        slider(b, 'Height above shell centre (mm)', S.source, 'z', -40, 40, 0.5, 'light');
+        select(b, 'Colour temperature', S.source, 'color', [['warm', '2700 K'], ['neutral', '4000 K'], ['cool', '6500 K']], 'light');
+      }
+    });
+
+    section('shells', 4, 'Shells', () => { const [A, B] = S.shells; return `${A.shape === 'sphere' ? 'Spheres' : 'Cylinders'}, ${+A.R.toFixed(1)} and ${+B.R.toFixed(1)} mm${A.cap.on || B.cap.on ? ', capped' : ''}`; }, shellsSection);
+    section('pattern', 5, 'Pattern', () => patSummary(S.shells[0].pattern), b => {
+      const A = S.shells[0];
+      b.append(el('div', { class: 'btnrow' },
+        el('button', { class: 'btn', id: 'rand', type: 'button', onclick: randomize, title: 'Randomize unlocked pattern settings (R)' }, 'Randomize'),
+        el('button', { class: 'btn ghost', id: 'undo', type: 'button', onclick: undoRandom, disabled: UI.undo ? false : '' }, 'Undo')));
+      patternControls(b, A.pattern, 'Generator', 'A');
+      if (A.cap.on) {
+        check(b, 'Cap follows wall pattern', A.cap, 'follow', 'geom', true);
+        if (!A.cap.follow) patternControls(b, A.cap.pattern, 'Cap generator', 'Acap');
+      }
+      note(b, 'Randomize changes the visible, unlocked sliders here and in the moiré step, and keeps the first result that passes the print checks.');
+    });
+    section('link', 6, 'Moiré', () => S.link.mode === 'linked' ? `Linked, detune ${S.link.detune > 0 ? '+' : ''}${S.link.detune}${S.link.mirror ? ', mirrored' : ''}` : 'Independent', linkSection);
+    section('motion', 7, 'Motion', () => ({ static: 'Static', manual: 'Manual twist', motor: 'Motor' })[S.motion.mode], motionSection);
+    section('make', 8, 'Make', () => `${S.process.profile}, ${G[0] && G[1] && G[0].ok && G[1].ok && !notes.some(x => x.bad) ? 'ready to export' : 'needs attention'}`, makeSection);
+    section('view', 0, 'Preview', () => `Exposure ${num(S.room.exposure, 0.05)}`, b => {
+      slider(b, 'Exposure', S.room, 'exposure', 0.05, 6, 0.05, 'light');
+      if (ADV()) {
+        slider(b, 'Ambient fill', S.room, 'ambient', 0, 0.3, 0.005, 'light');
+        slider(b, 'Room width (mm)', S.room, 'W', 1500, 9000, 50, 'room');
+        slider(b, 'Room depth (mm)', S.room, 'D', 1500, 9000, 50, 'room');
+        slider(b, 'Ceiling height (mm)', S.room, 'H', 2000, 5000, 50, 'room');
+        note(b, 'Direct light only. A real room adds bounce light, which lowers contrast; raise ambient fill to approximate it.');
+      }
+    });
+    refreshSummaries();
+    side.scrollTop = top;
+  }
+  function patSummary(p) {
+    const g = GENS[p.gen], v = p.params[p.gen][g.count];
+    return `${g.label}, ${Math.round(v)}`;
+  }
+
+  function shellsSection(b) {
+    const [A, B] = S.shells;
+    select(b, 'Shape', A, 'shape', [['cylinder', 'Cylinder'], ['sphere', 'Sphere']], 'geom', true, v => { B.shape = v; });
+    slider(b, 'Radius (mm)', A, 'R', 15, 250, 0.5, 'geom');
+    slider(b, 'Top, above the light (mm)', A, 'zTop', 0, 300, 0.5, 'geom');
+    slider(b, 'Bottom, below the light (mm)', A, 'zBot', -300, 0, 0.5, 'geom');
+    check(b, 'Top caps', A.cap, 'on', 'geom', true, v => { B.cap.on = v; });
+    check(b, 'Fit outer shell automatically', S.fit, 'auto', 'geom', true, v => { if (v) S.fit.gap = Math.max(2, +(B.R - A.R - A.t).toFixed(1)); });
+    if (S.fit.auto) slider(b, 'Gap between shells (mm)', S.fit, 'gap', 2, 40, 0.5, 'geom');
+    else {
+      slider(b, 'Outer radius (mm)', B, 'R', 15, 260, 0.5, 'geom');
+      slider(b, 'Outer top, above the light (mm)', B, 'zTop', 0, 320, 0.5, 'geom');
+    }
+    if (!ADV()) return;
+    for (const k of [0, 1]) {
+      const sh = S.shells[k];
+      b.append(el('h3', { class: 'sub' }, k ? 'Outer shell' : 'Inner shell'));
+      if (k === 1 && S.fit.auto) { note(b, 'Fitted from the inner shell and the gap. Untick “Fit outer shell automatically” to edit it.'); continue; }
+      slider(b, 'Wall (mm)', sh, 't', 1, 8, 0.1, 'geom');
+      if (k === 1) { slider(b, 'Outer bottom, below the light (mm)', sh, 'zBot', -320, 0, 0.5, 'geom'); }
+      slider(b, 'Bottom rim (mm)', sh, 'rimBot', 1, 60, 0.5, 'geom');
+      slider(b, sh.cap.on ? 'Corner band, wall to cap (mm)' : 'Top rim (mm)', sh, 'rimTop', 1, 60, 0.5, 'geom');
+      if (k === 1) check(b, 'Top cap', sh.cap, 'on', 'geom', true);
+      if (sh.cap.on) slider(b, 'Cap hub radius (mm)', sh.cap, 'hub', 2, 60, 0.5, 'geom');
+    }
+  }
+
+  function patternControls(b, pat, title, who) {
+    select(b, title, pat, 'gen', Object.keys(GENS).map(g => [g, GENS[g].label]), 'geom', true);
+    const P = pat.params[pat.gen];
+    for (const q of GENS[pat.gen].params) {
+      if (!ADV() && !q.basic) continue;
+      if (q.type === 'bool') check(b, q.label, P, q.k, 'geom');
+      else slider(b, q.label, P, q.k, q.min, q.max, q.step, 'geom', { lock: `${who}.${pat.gen}.${q.k}` });
+    }
+    if (ADV()) {
+      slider(b, 'Phase (°)', pat, 'phase', -180, 180, 0.5, 'geom');
+      check(b, 'Invert (open becomes solid)', pat, 'invert', 'geom');
+    }
+  }
+
+  function linkSection(b) {
+    const B = S.shells[1];
+    select(b, 'Outer pattern', S.link, 'mode', [['linked', 'Same as inner, detuned'], ['independent', 'Independent']], 'geom', true);
+    if (S.link.mode === 'linked') {
+      const key = GENS[S.shells[0].pattern.gen].count;
+      slider(b, `Detune (${key} + n)`, S.link, 'detune', -48, 48, 1, 'geom', { lock: 'link.detune' });
+      check(b, 'Mirror', S.link, 'mirror', 'geom');
+    } else {
+      patternControls(b, B.pattern, 'Outer generator', 'B');
+      if (B.cap.on) {
+        check(b, 'Outer cap follows its wall pattern', B.cap, 'follow', 'geom', true);
+        if (!B.cap.follow) patternControls(b, B.cap.pattern, 'Outer cap generator', 'Bcap');
+      }
+      if (ADV()) check(b, 'Mirror', S.link, 'mirror', 'geom');
+    }
+    UI.lobes = note(b, ''); lobeHint();
+  }
+
+  function motionSection(b) {
+    select(b, 'Mode', S.motion, 'mode', [['static', 'Static'], ['manual', 'Manual twist'], ['motor', 'Motor']], 'motion', true, v => {
+      if (v !== 'motor') { UI.playing = false; UI.animA = UI.animB = 0; }
+    });
+    UI.period = UI.beat = null;
+    if (S.motion.mode === 'static') { note(b, 'The shells stay as assembled. Choose manual twist or motor to explore how they move.'); return; }
+    if (S.motion.mode === 'manual') {
+      const snap = v => S.motion.snap > 0 ? Math.round(v / S.motion.snap) * S.motion.snap : v;
+      const off = slider(b, 'Outer shell twist (°)', S.motion, 'offset', -180, 180, 0.1, 'motion', { snap });
+      const bm = el('div', { class: 'marks' });
+      const drawMarks = () => {
+        bm.innerHTML = '';
+        S.motion.bookmarks.forEach((v, i) => bm.append(el('span', { class: 'mark' },
+          el('button', { class: 'chip', onclick: () => off.set(v, true), title: 'Go to this twist' }, `${num(v, 0.1)}°`),
+          el('button', { class: 'x', 'aria-label': 'Remove bookmark', onclick: () => { S.motion.bookmarks.splice(i, 1); drawMarks(); changed('motion'); } }, '×'))));
+        bm.append(el('button', { class: 'chip add', onclick: () => { if (!S.motion.bookmarks.includes(S.motion.offset)) S.motion.bookmarks.push(S.motion.offset); S.motion.bookmarks.sort((a, c) => a - c); drawMarks(); changed('motion'); } }, 'Bookmark this twist'));
+      };
+      drawMarks(); b.append(bm);
+      UI.period = note(b, '');
+      if (ADV()) slider(b, 'Detent step (°, 0 = free)', S.motion, 'snap', 0, 30, 0.5, 'motion');
+    } else {
+      slider(b, 'Inner shell speed (rpm)', S.motion, 'rpmA', -15, 15, 0.05, 'motion');
+      slider(b, 'Outer shell speed (rpm)', S.motion, 'rpmB', -15, 15, 0.05, 'motion');
+      b.append(el('div', { class: 'btnrow' },
+        el('button', { class: 'btn', id: 'play', onclick: () => { UI.playing = !UI.playing; $('#play').textContent = UI.playing ? 'Pause spin' : 'Play spin'; dirty(); } }, UI.playing ? 'Pause spin' : 'Play spin'),
+        el('button', { class: 'btn ghost', onclick: () => { UI.animA = UI.animB = 0; dirty(); } }, 'Reset spin')));
+      UI.beat = note(b, '');
+    }
+    beatHint();
+  }
+
+  function makeSection(b) {
+    select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF']], 'geom', true);
+    UI.makeNote = note(b, ''); makeHint();
+    if (!ADV()) return;
+    slider(b, 'Minimum web (mm)', S.process, 'minWeb', 0.6, 6, 0.1, 'geom');
+    slider(b, 'Minimum hole (mm)', S.process, 'minHole', 0.6, 8, 0.1, 'geom');
+    slider(b, 'Shell clearance (mm)', S.process, 'clearance', 0, 3, 0.05, 'geom');
+    check(b, 'Fill undersized holes', S.process, 'fillSmall', 'geom');
+    check(b, 'Split spheres at the equator', S.process, 'split', 'geom', true);
+    if (S.process.split) slider(b, 'Seam band (mm)', S.process, 'seam', 0, 12, 0.5, 'geom');
+    slider(b, 'Grid resolution (mm)', S, 'res', 0.35, 2, 0.05, 'geom');
+    UI.triNote = note(b, ''); triHint();
+    note(b, 'Holes are cut along rays from the light centre, so the wall thickness does not narrow the beam.');
+  }
+
+  // ---------- randomize ----------
+  // Ranges that tend to look good; the slider limits stay wider for manual tuning.
+  const NICE = {
+    slots: { N: [12, 90], twist: [-1.5, 1.5], wobA: [0, 6], wobK: [1, 4], duty: [0.3, 0.55] },
+    rings: { pitch: [3, 12], K: [0, 12], amp: [0, 4], duty: [0.3, 0.55], bridges: [6, 24], bridgeW: [2.5, 4] },
+    phyllo: { N: [150, 900], size: [0.4, 0.75], grad: [-0.5, 0.5] },
+    voronoi: { N: [80, 500], web: [2.4, 5], jitter: [0.2, 0.9], seed: [1, 999] },
+    superformula: { N: [8, 40], rows: [3, 12], m: [2, 9], n1: [0.3, 4], n2: [0.3, 4], n3: [0.3, 4], size: [0.5, 0.85], grad: [-0.5, 0.5], spin: [-30, 30] },
+  };
+  // Keep random counts within what the shell can print: roughly 7 mm per slot, 12 mm per lattice cell, 8 mm per dot.
+  function niceRange(gen, q, sh) {
+    let [lo, hi] = (NICE[gen] || {})[q.k] || [q.min, q.max];
+    const Ro = sh.R + sh.t, circ = 2 * Math.PI * Ro, area = circ * Math.max(20, sh.zTop - sh.zBot);
+    const cap = { slots: { N: circ / 7 }, superformula: { N: circ / 12 }, phyllo: { N: area / 64 }, voronoi: { N: area / 144 } }[gen];
+    if (cap && cap[q.k]) hi = Math.max(lo, Math.min(hi, Math.floor(cap[q.k])));
+    if (gen === 'rings' && q.k === 'pitch') lo = Math.max(lo, 7 / Ro * 180 / Math.PI);
+    return [lo, Math.max(lo, hi)];
+  }
+  const DETUNES = [-13, -8, -5, -3, -2, -1, 1, 2, 3, 5, 8, 13];
+  function randTargets() {
+    const [A, B] = S.shells, T = [{ pat: A.pattern, who: 'A' }];
+    if (A.cap.on && !A.cap.follow) T.push({ pat: A.cap.pattern, who: 'Acap' });
+    if (S.link.mode === 'independent') { T.push({ pat: B.pattern, who: 'B' }); if (B.cap.on && !B.cap.follow) T.push({ pat: B.cap.pattern, who: 'Bcap' }); }
+    return T;
+  }
+  function randomize() {
+    const btn = $('#rand'); if (btn) { btn.disabled = true; btn.textContent = 'Searching…'; }
+    setTimeout(() => {
+      const before = JSON.stringify({ shells: S.shells, link: S.link });
+      let best = null, bestScore = Infinity, tries = 0, changedN = 0;
+      for (; tries < 10; tries++) {
+        const cand = JSON.parse(before);
+        const tmp = Object.assign({}, S, cand);
+        changedN = 0;
+        for (const t of randTargets()) {
+          const pat = t.who[0] === 'A' ? (t.who === 'A' ? tmp.shells[0].pattern : tmp.shells[0].cap.pattern) : (t.who === 'B' ? tmp.shells[1].pattern : tmp.shells[1].cap.pattern);
+          const P = pat.params[pat.gen];
+          for (const q of GENS[pat.gen].params) {
+            if (q.type === 'bool' || (!ADV() && !q.basic) || UI.locks.includes(`${t.who}.${pat.gen}.${q.k}`)) continue;
+            const [lo, hi] = niceRange(pat.gen, q, tmp.shells[t.who[0] === 'A' ? 0 : 1]);
+            P[q.k] = Math.min(q.max, Math.max(q.min, Math.round((lo + Math.random() * (hi - lo)) / q.step) * q.step));
+            changedN++;
+          }
+        }
+        if (tmp.link.mode === 'linked' && !UI.locks.includes('link.detune')) { tmp.link.detune = DETUNES[Math.floor(Math.random() * DETUNES.length)]; changedN++; }
+        if (!changedN) break;
+        if (tmp.fit.auto) fitOuter(tmp);
+        const pats = effectivePatterns(tmp), caps = effectiveCaps(tmp);
+        const g = [0, 1].map(k => buildShell(tmp.shells[k], pats[k], { res: Math.max(1.0, S.res * 1.6), fillSmall: S.process.fillSmall, minWeb: S.process.minWeb, minHole: S.process.minHole, split: S.process.split, seam: S.process.seam, mirror: k === 1 && tmp.link.mirror, capPattern: caps[k], capFollow: capFollows(tmp, k), fdm: S.process.profile === 'FDM' }));
+        // filled holes count against a candidate: a pattern whose holes all got filled is not a lamp
+        const score = g.reduce((n, x) => n + (x.ok && x.stats.holes > 0 ? x.stats.thin + x.stats.small + x.stats.filled + x.stats.dropped : 1000), 0) + (clearanceGap(g[0], g[1]) < S.process.clearance ? 1000 : 0);
+        if (score < bestScore) { bestScore = score; best = cand; }
+        if (score === 0) break;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Randomize'; }
+      if (!changedN || !best) { toast('Everything visible is locked. Unlock a slider to randomize it.'); return; }
+      UI.undo = before;
+      S.shells = best.shells; S.link = best.link;
+      renderSidebar(); build(false); changed('motion');
+      toast(bestScore === 0 ? `New variation after ${tries + 1} ${tries ? 'tries' : 'try'}; it passes the print checks.` : `No fully clean variation in 10 tries; showing the closest (${bestScore >= 1000 ? 'blocked' : bestScore + ' flags'}).`, bestScore >= 1000);
+    }, 20);
+  }
+  function undoRandom() {
+    if (!UI.undo) return;
+    const u0 = JSON.parse(UI.undo); UI.undo = null;
+    S.shells = u0.shells; S.link = u0.link;
+    renderSidebar(); build(false); changed('motion'); toast('Restored the previous pattern.');
+  }
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && !e.altKey && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) randomize();
+  });
+
+  // ---------- hints ----------
+  function sharpHint() {
+    if (!UI.sharp) return;
+    const s = S.source;
+    if (s.type === 'point') UI.sharp.textContent = 'An ideal point gives perfectly sharp shadows. Real emitters blur edges by their own size.';
+    else if (s.type === 'line') UI.sharp.textContent = 'A filament blurs edges along its length and stays sharp across it: vertical slots stay crisp, horizontal rings blur.';
+    else UI.sharp.textContent = `Edges stay crisp where openings are at least 5× the emitter: ${num(5 * s.size, 0.5)} mm here. Smaller openings project as soft blobs.`;
+  }
+  function triHint() {
+    if (!UI.triNote || !G[0]) return;
+    const t = (G[0].stats ? G[0].stats.estTris : 0) + (G[1] && G[1].stats ? G[1].stats.estTris : 0);
+    UI.triNote.textContent = `About ${(t / 1e6).toFixed(2)} M triangles, ${Math.round(t * 50 / 1e6)} MB of STL. Coarser grid, smaller files.`;
+  }
+  function makeHint() {
+    if (!UI.makeNote) return;
+    const bad = notes.filter(x => x.bad).length + [0, 1].filter(k => G[k] && !G[k].ok).length;
+    const flags = [0, 1].reduce((n, k) => n + (G[k] && G[k].stats ? G[k].stats.thin + G[k].stats.small : 0), 0);
+    UI.makeNote.textContent = bad ? `${bad} blocking issue${bad > 1 ? 's' : ''}. See the notes under the checks table.` :
+      flags ? `Exportable, with ${flags} flagged feature${flags > 1 ? 's' : ''} to review in the checks table.` : 'All checks pass. Export when the preview looks right.';
+  }
+  function periodText() {
+    const tp = twistPeriods(effectivePatterns(S)[1], S.shells[1].cap.on ? effectiveCaps(S)[1] : null);
+    const d = v => v === null ? 'no short repeat' : v === 0 ? 'unchanged by twist' : `repeats every ${num(v, 0.01)}°`;
+    if (S.shells[1].cap.on && tp.wall === tp.cap) return `The outer shell's look ${d(tp.wall)} of twist, walls and cap together.`;
+    return `Outer wall ${d(tp.wall)}` + (S.shells[1].cap.on ? `; outer cap ${d(tp.cap)}.` : '.');
+  }
+  function lobeHint() {
+    if (!UI.lobes) return;
+    const [pa, pb] = effectivePatterns(S), bi = beatInfo(pa, pb, S.link.mirror, 0, 0);
+    UI.lobes.textContent = !bi ? 'Different generators: the room shows their product, with no single beat count.' :
+      bi.lobes === 0 ? 'Counts match, so there is no beat: twisting shifts the whole field at once.' :
+      `${bi.lobes} moiré lobe${bi.lobes > 1 ? 's' : ''} around the room. Twisting moves them ${num(bi.amp, 0.1)}× faster than the shell turns.`;
+  }
+  function beatHint() {
+    lobeHint();
+    if (UI.period) UI.period.textContent = periodText();
+    if (!UI.beat) return;
+    const [pa, pb] = effectivePatterns(S), bi = beatInfo(pa, pb, S.link.mirror, S.motion.rpmA, S.motion.rpmB);
+    UI.beat.textContent = !bi || bi.lobes === 0 ? 'No single beat to track with these patterns.' :
+      Math.abs(bi.rate) > 1e-6 ? `The room pattern turns at ${num(bi.rate, 0.01)} rpm.` : 'The room pattern is still.';
+  }
+
+  // ---------- build pipeline ----------
+  let buildT = null, fullT = null, saveT = null;
+  function changed(kind, draft) {
+    if (kind === 'geom') { clearTimeout(buildT); buildT = setTimeout(() => build(draft), draft ? 10 : 20); }
+    else if (kind === 'room') { R && R.setRoom(S.room.W, S.room.D, S.room.H); setView(UI.view); }
+    else if (kind === 'light') { R && R.setEmitter(S.source); crossChecks(); renderChecks(); makeHint(); dirty(); }
+    else if (kind === 'motion') { beatHint(); dirty(); }
+    if (kind === 'geom' && S.process.profile !== UI.lastProfile) applyProfile();
+    beatHint(); sharpHint(); refreshSummaries();
+    clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }, 600);
+  }
+  function applyProfile() {
+    if (UI.lastProfile) {
+      Object.assign(S.process, S.process.profile === 'SLS' ? { minWeb: 1.5, minHole: 2, clearance: 0.5, split: false } : { minWeb: 2, minHole: 3, clearance: 0.4, split: true });
+      renderSidebar();
+    }
+    UI.lastProfile = S.process.profile;
+  }
+  function opts(k, res, caps) { return { res, fillSmall: S.process.fillSmall, minWeb: S.process.minWeb, minHole: S.process.minHole, split: S.process.split, seam: S.process.seam, mirror: k === 1 && S.link.mirror, capPattern: caps[k], capFollow: capFollows(S, k), fdm: S.process.profile === 'FDM' }; }
+  function build(draft) {
+    const res = draft ? Math.min(2.5, S.res * 2) : S.res;
+    if (S.fit.auto) fitOuter(S);
+    const pats = effectivePatterns(S), caps = effectiveCaps(S);
+    G = [0, 1].map(k => buildShell(S.shells[k], pats[k], opts(k, res, caps)));
+    G.draft = draft;
+    crossChecks();
+    if (R) { R.setShell(0, G[0]); R.setShell(1, G[1]); }
+    drawMasks(); renderChecks(); triHint(); makeHint(); refreshSummaries(); dirty();
+    clearTimeout(fullT); if (draft) fullT = setTimeout(() => build(false), 260);
+  }
+  function crossChecks() {
+    notes = [];
+    for (const k of [0, 1]) for (const e of (G[k] ? G[k].errors : [])) notes.push({ bad: true, t: `${k ? 'Outer' : 'Inner'} shell: ${e}` });
+    for (const k of [0, 1]) for (const w of (G[k] ? G[k].warnings : [])) notes.push({ bad: false, t: `${k ? 'Outer' : 'Inner'} shell: ${w}` });
+    if (G[0] && G[1] && G[0].ok && G[1].ok) {
+      const gap = clearanceGap(G[0], G[1]);
+      if (gap < S.process.clearance) notes.push({ bad: true, t: gap < 0 ? `Shells overlap by ${num(-gap, 0.01)} mm. Grow the outer radius or shrink the inner shell.` : `Shells are ${num(gap, 0.01)} mm apart; the process needs ${S.process.clearance} mm to rotate freely.` });
+      else if (gap < Infinity) notes.push({ bad: false, ok: true, t: `Closest gap between shells: ${num(gap, 0.1)} mm.` });
+    }
+    if (G[0] && !sourceInside(G[0], S.source)) notes.push({ bad: true, t: 'The emitter pokes through the inner shell or its cap. Shrink it or move it.' });
+    if (S.process.profile === 'FDM' && S.shells.some(sh => sh.cap.on && sh.shape === 'cylinder')) notes.push({ bad: false, t: 'Print capped cylinders cap-down: the flat cap needs no support.' });
+  }
+
+  // ---------- mask strip & checks ----------
+  const COL = { solid: [52, 57, 64], open: [244, 214, 160], drop: [201, 59, 59], thin: [230, 120, 30], small: [140, 110, 240] };
+  const maskImg = [null, null];
+  function drawMasks() {
+    for (const k of [0, 1]) {
+      const g = G[k]; maskImg[k] = null;
+      if (!g || !g.field) continue;
+      const c = document.createElement('canvas'); c.width = g.Nc; c.height = g.Nb;
+      const cx = c.getContext('2d'), im = cx.createImageData(g.Nc, g.Nb), d = im.data;
+      for (let j = 0; j < g.Nb; j++) for (let i = 0; i < g.Nc; i++) {
+        const k2 = j * g.Nc + i, f = g.flags[k2], o = ((g.Nb - 1 - j) * g.Nc + i) * 4;
+        const col = f & 1 ? COL.drop : f & 2 ? COL.thin : f & 12 ? COL.small : g.field[k2] < 0 ? COL.open : COL.solid;
+        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+      }
+      cx.putImageData(im, 0, 0); maskImg[k] = c;
+    }
+    paintMasks();
+  }
+  function paintMasks() {
+    const cv = $('#mask'), box = cv.parentElement, dpr = Math.min(2, devicePixelRatio || 1);
+    const w = box.clientWidth, h = box.clientHeight; if (!w || !h) return;
+    cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    const cx = cv.getContext('2d'); cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, w, h);
+    const cs = getComputedStyle(document.documentElement);
+    const lab = 18, gap = 14, colW = (w - gap) / 2;
+    [0, 1].forEach(k => {
+      const x = k * (colW + gap), img = maskImg[k], g = G[k];
+      cx.fillStyle = cs.getPropertyValue('--ink-2'); cx.font = '500 13px "Barlow Semi Condensed", system-ui, sans-serif';
+      const title = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped' + (g && g.ok && g.cap ? ': wall, then cap above' : '') + (g && g.ok && g.split ? ', printed as two halves' : '');
+      cx.fillText(title, x, 13);
+      if (!img) { cx.fillText('Fix the errors on the right to see the pattern.', x, 40); return; }
+      const ah = h - lab - 4, sc = Math.min(colW / img.width, ah / img.height);
+      const dw = img.width * sc, dh = img.height * sc;
+      cx.imageSmoothingEnabled = sc < 1; cx.drawImage(img, x, lab + (ah - dh) / 2, dw, dh);
+    });
+  }
+  function renderChecks() {
+    const t = $('#checks'); t.innerHTML = '';
+    const row = (name, f, cls) => {
+      const tr = el('tr', {}, el('th', { scope: 'row' }, name));
+      for (const k of [0, 1]) { const g = G[k], v = g && g.stats ? f(g) : '—'; tr.append(el('td', { class: cls && g && g.stats ? cls(g) : '' }, v)); }
+      t.append(tr);
+    };
+    t.append(el('tr', {}, el('th', {}, ''), el('th', { scope: 'col' }, 'Inner'), el('th', { scope: 'col' }, 'Outer')));
+    row('Status', g => g.ok ? (G.draft ? 'Draft' : 'Ready') : 'Blocked', g => g.ok ? 'ok' : 'bad');
+    row('Holes', g => g.stats.holes);
+    row('Open area', g => Math.round(g.stats.open * 100) + '%');
+    row('Islands removed', g => g.stats.dropped, g => g.stats.dropped ? 'bad' : '');
+    row(`Webs under ${S.process.minWeb} mm`, g => g.stats.thin, g => g.stats.thin ? 'warn' : '');
+    if (S.process.fillSmall) row(`Holes filled (under ${S.process.minHole} mm)`, g => g.stats.filled, g => g.stats.filled ? 'odd' : '');
+    else row(`Holes under ${S.process.minHole} mm`, g => g.stats.small, g => g.stats.small ? 'odd' : '');
+    row('Triangles', g => (g.stats.estTris / 1e6).toFixed(2) + ' M');
+    const n = $('#notes'); n.innerHTML = '';
+    for (const x of notes) n.append(el('li', { class: x.bad ? 'bad' : x.ok ? 'ok' : 'warn' }, x.t));
+    const blocked = !(G[0] && G[0].ok && G[1] && G[1].ok) || notes.some(x => x.bad && /overlap/.test(x.t));
+    $('#export').disabled = blocked;
+  }
+
+  // ---------- renderer / camera ----------
+  const canvas = $('#gl');
+  let R = null;
+  try { R = createRenderer(canvas); } catch (e) { $('#glerr').textContent = 'The 3D preview failed to start: ' + e.message; $('#glerr').hidden = false; console.error(e); }
+  if (!R) { $('#glerr').hidden = false; }
+  const cam = { tgt: [0, 0, 0], yaw: 0, pitch: 0, dist: 1000 };
+  function eyePos() { const cp = Math.cos(cam.pitch); return [cam.tgt[0] + cam.dist * cp * Math.cos(cam.yaw), cam.tgt[1] + cam.dist * cp * Math.sin(cam.yaw), cam.tgt[2] + cam.dist * Math.sin(cam.pitch)]; }
+  function clampCam() {
+    const m = 25, { W, D, H } = S.room;
+    cam.tgt[0] = Math.max(-W / 2 + m, Math.min(W / 2 - m, cam.tgt[0])); cam.tgt[1] = Math.max(-D / 2 + m, Math.min(D / 2 - m, cam.tgt[1])); cam.tgt[2] = Math.max(m, Math.min(H - m, cam.tgt[2]));
+    cam.pitch = Math.max(-1.5, Math.min(1.5, cam.pitch)); cam.dist = Math.max(80, Math.min(12000, cam.dist));
+  }
+  function lookFrom(eye, tgt) { const d = [eye[0] - tgt[0], eye[1] - tgt[1], eye[2] - tgt[2]]; cam.tgt = tgt.slice(); cam.dist = Math.hypot(...d); cam.yaw = Math.atan2(d[1], d[0]); cam.pitch = Math.asin(d[2] / cam.dist); }
+  function setView(v) {
+    UI.view = v; const { W, D, H, lampZ } = S.room;
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === v ? 'true' : 'false'));
+    if (v === 'room') lookFrom([W / 2 - 120, -D / 2 + 120, Math.min(H - 150, lampZ + 350)], [0, 0, lampZ]);
+    if (v === 'wall') lookFrom([0, -D / 2 + 60, Math.min(H - 100, lampZ + 150)], [0, D / 2, lampZ]);
+    if (v === 'ceiling') lookFrom([W / 2 - 150, -D / 2 + 150, 300], [0, 0, H]);
+    if (v === 'lamp') lookFrom([420, -300, lampZ + 160], [0, 0, lampZ]);
+    clampCam(); dirty();
+  }
+  function camEye() {
+    const e = eyePos(), m = 12, { W, D, H } = S.room;
+    return [Math.max(-W / 2 + m, Math.min(W / 2 - m, e[0])), Math.max(-D / 2 + m, Math.min(D / 2 - m, e[1])), Math.max(m, Math.min(H - m, e[2]))];
+  }
+  const ptrs = new Map(); let pinch0 = 0;
+  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button, sh: e.shiftKey }); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); } });
+  canvas.addEventListener('pointerup', e => ptrs.delete(e.pointerId));
+  canvas.addEventListener('pointercancel', e => ptrs.delete(e.pointerId));
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch0) cam.dist *= pinch0 / d; pinch0 = d; }
+    else if (p.b === 2 || p.sh) {
+      const s = cam.dist * 0.0014, cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+      cam.tgt[0] += sy * dx * s; cam.tgt[1] -= cy * dx * s; cam.tgt[2] += dy * s;
+    } else { cam.yaw -= dx * 0.006; cam.pitch += dy * 0.006; }
+    clampCam(); dirty();
+  });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist *= Math.exp(e.deltaY * 0.0012); clampCam(); dirty(); }, { passive: false });
+
+  const TESTN = +(new URLSearchParams(location.search).get('frames') || 0);
+  const LIGHT = { warm: [1.0, 0.74, 0.47], neutral: [1.0, 0.88, 0.76], cool: [0.93, 0.97, 1.0] };
+  let accN = 0, needReset = true, last = performance.now();
+  function dirty() { needReset = true; }
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!R) return;
+    if (UI.playing && S.motion.mode === 'motor' && (S.motion.rpmA || S.motion.rpmB)) { UI.animA += S.motion.rpmA * 6 * dt; UI.animB += S.motion.rpmB * 6 * dt; needReset = true; }
+    const dpr = Math.min(1.5, devicePixelRatio || 1);
+    const w = Math.max(2, Math.round(canvas.clientWidth * dpr)), h = Math.max(2, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; needReset = true; }
+    R.targets(w, h);
+    const pt = S.source.type === 'point';
+    const maxN = TESTN || (R.floatOK ? (pt ? 12 : 128) : 1);
+    if (needReset) { accN = 0; needReset = false; }
+    if (accN >= maxN) return;
+    const eye = camEye(), tgt = cam.tgt;
+    const vp = M4.mul(M4.persp(62 * Math.PI / 180, w / h, 5, 30000), M4.look(eye, tgt, [0, 0, 1]));
+    const jit = accN === 0 || !R.floatOK ? [0, 0] : [(Math.random() - 0.5) * 2 / w, (Math.random() - 0.5) * 2 / h];
+    R.draw({ vp, lamp: [0, 0, S.room.lampZ], rot: [UI.animA * DEG, (S.motion.offset + UI.animB) * DEG], src: S.source,
+      samples: UI.playing ? 16 : 8, frame: accN, power: 2.5e6, lightCol: LIGHT[S.source.color], ambient: S.room.ambient,
+      exposure: S.room.exposure, jitter: jit, count: accN });
+    accN++;
+    const st = $('#refine');
+    st.textContent = pt || !R.floatOK ? '' : accN < maxN ? `Refining soft shadows ${Math.round(100 * accN / maxN)}%` : '';
+  }
+
+  // ---------- export ----------
+  function toast(t, bad) { const n = $('#toast'); n.textContent = t; n.className = bad ? 'bad' : ''; n.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => n.hidden = true, 5000); }
+  async function save(filename, data, label) {
+    const dl = await downloads;
+    if (dl) {
+      try { await dl.save({ filename, data }); toast(`Saved ${label}.`); }
+      catch (e) { if (e && e.code === 'declined') toast('Save cancelled.'); else toast(`Could not save ${label}: ${(e && e.message) || e}`, true); }
+      return;
+    }
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    const a = el('a', { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000); toast(`Saved ${label}.`);
+  }
+  function interfaceSpec(gap) {
+    const prof = (sh, Rs, z) => sh.shape === 'sphere' ? Math.sqrt(Math.max(0, Rs * Rs - z * z)) : Rs;
+    return {
+      units: 'mm', note: 'Mating dimensions for the stem, bearings and detents you design in CAD. Shell axis is z; the light centre is the origin.',
+      shells: [0, 1].map(k => {
+        const sh = S.shells[k], g = G[k], R0 = sh.R, R1 = sh.R + sh.t;
+        const end = z => ({ z: +z.toFixed(3), innerDiameter: +(2 * prof(sh, R0, z)).toFixed(3), outerDiameter: +(2 * prof(sh, R1, z)).toFixed(3) });
+        const top = g.cap ? { cap: true, outerPlaneZ: g.zTop, innerPlaneZ: +(g.zTop - sh.t).toFixed(3), hubRadius: sh.cap.hub, outerDiameterAtTop: +(2 * g.rhoC).toFixed(3) } : Object.assign({ cap: false }, end(g.zTop));
+        return { role: k ? 'outer' : 'inner', shape: sh.shape, innerRadius: R0, wall: sh.t, bottomEnd: end(g.zBot), top, splitAtEquator: g.split, seamBand: g.split ? S.process.seam : 0 };
+      }),
+      closestGap: +gap.toFixed(3), requiredClearance: S.process.clearance,
+      twistPeriodDeg: twistPeriods(effectivePatterns(S)[1], S.shells[1].cap.on ? effectiveCaps(S)[1] : null),
+      motion: { outerTwistDeg: S.motion.offset, detentStepDeg: S.motion.snap, bookmarksDeg: S.motion.bookmarks, rpmInner: S.motion.rpmA, rpmOuter: S.motion.rpmB },
+      source: S.source,
+    };
+  }
+  async function exportPack() {
+    const btn = $('#export'); btn.disabled = true; const old = btn.textContent; btn.textContent = 'Building meshes…';
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      clearTimeout(fullT); clearTimeout(buildT); build(false);
+      if (!(G[0].ok && G[1].ok)) { toast('Fix the blocked shell before exporting.', true); return; }
+      const files = [], report = [`Tenebrae export, ${new Date().toISOString()}`, `Grid ${S.res} mm, process ${S.process.profile}, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`, ''];
+      let allOK = true;
+      for (const k of [0, 1]) for (const part of G[k].parts) {
+        const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}.stl`;
+        btn.textContent = `Meshing ${name}…`; await new Promise(r => setTimeout(r, 0));
+        const m = buildMesh(G[k], part), c = checkMesh(m, part.holes, part.ends);
+        allOK = allOK && c.ok;
+        report.push(`${name}: ${c.F} triangles, ${c.ok ? 'watertight' : 'CHECK FAILED'} (open edges ${c.badEdges}, genus ${c.genus}, expected ${c.expectGenus} for ${part.holes} holes)`);
+        files.push({ name, data: stlBinary(m, name) });
+      }
+      for (const k of [0, 1]) { const s = G[k].stats; report.push(`${k ? 'Outer' : 'Inner'}: ${s.holes} holes, ${Math.round(s.open * 100)}% open, ${s.dropped} islands removed, ${s.thin} thin webs, ${s.small} undersized holes left, ${s.filled} filled`); }
+      for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
+      const enc = new TextEncoder();
+      files.push({ name: 'design.json', data: enc.encode(JSON.stringify(S, null, 2)) });
+      files.push({ name: 'interface.json', data: enc.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
+      files.push({ name: 'checks.txt', data: enc.encode(report.join('\n') + '\n') });
+      btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
+      const blob = new Blob(zipStore(files), { type: 'application/zip' });
+      if (!allOK) toast('A mesh check failed; see checks.txt in the zip.', true);
+      await save(`tenebrae-${new Date().toISOString().slice(0, 10)}.zip`, blob, 'print files');
+    } catch (e) { console.error(e); toast('Export failed: ' + e.message, true); }
+    finally { btn.textContent = old; renderChecks(); }
+  }
+
+  // ---------- header wiring ----------
+  const ps = $('#preset');
+  const groups = {};
+  PRESETS.forEach((p, i) => { const g = p.group || 'Studies'; if (!groups[g]) { groups[g] = el('optgroup', { label: g }); ps.append(groups[g]); } groups[g].append(el('option', { value: i }, p.name)); });
+  ps.value = '';
+  ps.addEventListener('change', () => {
+    const pr = PRESETS[+ps.value], p = pr.make(); S.shells = p.shells; S.link = p.link; S.fit = p.fit; S.plan = p.plan; S.motion.offset = 0; UI.animA = UI.animB = 0;
+    if (pr.source) { S.source = JSON.parse(JSON.stringify(pr.source)); R && R.setEmitter(S.source); }
+    if (pr.mount) { S.lamp.mount = pr.mount; S.room.lampZ = MOUNT_Z[pr.mount]; R && R.setRoom(S.room.W, S.room.D, S.room.H); setView(UI.view); }
+    UI.undo = null;
+    renderSidebar(); build(false); changed('motion'); ps.blur();
+  });
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  $('#export').addEventListener('click', exportPack);
+  $('#savejson').addEventListener('click', () => save('tenebrae-design.json', JSON.stringify(S, null, 2), 'design'));
+  $('#loadjson').addEventListener('click', () => $('#file').click());
+  $('#file').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { try { S = loadDesign(JSON.parse(rd.result)); UI.lastProfile = S.process.profile; renderSidebar(); R && (R.setRoom(S.room.W, S.room.D, S.room.H), R.setEmitter(S.source)); build(false); setView(UI.view); toast('Design loaded.'); } catch (err) { toast('That file is not a Tenebrae design: ' + err.message, true); } };
+    rd.readAsText(f); e.target.value = '';
+  });
+  new ResizeObserver(() => { paintMasks(); dirty(); }).observe($('#maskbox'));
+  downloads.then(d => { if (!d && window.claude && window.claude.use) { /* viewer without downloads: anchor fallback stays */ } });
+
+  UI.lastProfile = S.process.profile;
+  renderSidebar();
+  if (R) { R.setRoom(S.room.W, S.room.D, S.room.H); R.setEmitter(S.source); }
+  build(false); setView('room');
+  if (R && !R.floatOK) $('#refine').textContent = 'Soft-shadow refinement unavailable on this GPU; showing single-pass shadows.';
+  requestAnimationFrame(loop);
+  window.__tenebrae = { S, cam, dirty, get G() { return G; }, setView, build, exportPack };
+})();
+
+</script>
+</body>
+</html>

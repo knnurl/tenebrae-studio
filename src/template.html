@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tenebrae — two-shell shadow lamp designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceef1;--panel:#f6f7f8;--field:#fff;--ink:#23272e;--ink-2:#5b626c;--rule:#d3d7dc;--lumen:#d98a1c;--lumen-ink:#7a4a05;--on-lumen:#1d1605;--bad:#c93b3b;--warn:#c96a16;--odd:#7657d6;--ok:#3f7d4e;--track:#cfd3d8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1f2329;--panel:#262b32;--field:#1c2026;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--on-lumen:#1d1605;--bad:#ef6a6a;--warn:#f09a4a;--odd:#a58df0;--ok:#7cc48d;--track:#3a414b}}
+:root[data-theme="dark"]{--bg:#1f2329;--panel:#262b32;--field:#1c2026;--ink:#e3e6ea;--ink-2:#9aa3ad;--rule:#363c45;--lumen:#f0ad4a;--lumen-ink:#f5c57e;--on-lumen:#1d1605;--bad:#ef6a6a;--warn:#f09a4a;--odd:#a58df0;--ok:#7cc48d;--track:#3a414b}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 "Barlow Semi Condensed",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--lumen);outline-offset:2px}
+.app{display:grid;grid-template-columns:330px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100%}
+header{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:8px 16px;border-bottom:1px solid var(--rule);background:var(--panel);flex-wrap:wrap}
+.mark-word{font-weight:600;font-size:26px;letter-spacing:.01em;line-height:1;margin:0;display:flex;align-items:baseline;gap:10px}
+.mark-word span{font-weight:400;font-size:15px;color:var(--ink-2);letter-spacing:0}
+.mark-word b{font-weight:600;background:radial-gradient(circle at 30% 45%,var(--lumen) 0 18%,transparent 62%);-webkit-background-clip:text;background-clip:text;color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 12px;cursor:pointer;color:var(--ink-2)}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.spacer{flex:1}
+#preset{max-width:230px}
+@media (max-width:1280px){.mark-word span{display:none}}
+select{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:4px 8px}
+.btn{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:5px 12px;cursor:pointer}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--lumen);border-color:var(--lumen);color:var(--on-lumen);font-weight:600}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:none}
+aside{overflow:auto;background:var(--panel);border-right:1px solid var(--rule);min-height:0;overscroll-behavior:contain}
+details{border-bottom:1px solid var(--rule)}
+summary{cursor:pointer;padding:11px 16px;font-weight:600;font-size:16px;list-style:none;display:flex;align-items:center;gap:10px}
+.step{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.step i{font-style:normal;width:21px;height:21px;border-radius:50%;border:1.5px solid var(--ink-2);display:inline-grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink-2)}
+details[open] .step i{border-color:var(--lumen);color:var(--lumen-ink)}
+.sum{margin-left:auto;color:var(--ink-2);font-weight:400;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.level{position:sticky;top:0;z-index:1;background:var(--panel);padding:10px 16px 8px;border-bottom:1px solid var(--rule);display:grid;gap:6px}
+.level .seg{justify-self:start}
+h3.sub{margin:8px 0 0;font-size:14px;font-weight:600;color:var(--ink)}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";flex:none;width:7px;height:7px;border-right:1.5px solid var(--ink-2);border-bottom:1.5px solid var(--ink-2);transform:rotate(-45deg);transition:transform .15s}
+details[open] summary::after{transform:rotate(45deg)}
+.sec{padding:0 16px 14px;display:grid;gap:9px}
+.ctl{display:grid;grid-template-columns:1fr 68px;gap:2px 8px;align-items:center}
+.ctl label{color:var(--ink-2);font-size:14px}
+.ctl input[type=number]{width:68px;text-align:right;background:var(--field);border:1px solid var(--rule);border-radius:4px;padding:1px 5px;font-size:14px}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--lumen);margin:0;height:18px}
+.ctl.sel{grid-template-columns:1fr auto}
+.ctl.lk{grid-template-columns:1fr 68px 24px}
+.lock{width:24px;height:22px;display:grid;place-items:center;border:1px solid transparent;border-radius:4px;background:none;color:var(--track);cursor:pointer;padding:0}
+.lock:hover{color:var(--ink-2)}
+.lock[aria-pressed="true"]{color:var(--lumen);border-color:var(--rule);background:var(--field)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ctl.sel select{max-width:190px}
+.ctl.chk{grid-template-columns:auto 1fr;gap:8px}
+.ctl.chk input{accent-color:var(--lumen);width:16px;height:16px;margin:0}
+.ctl.chk label{color:var(--ink)}
+.hint{margin:2px 0 0;font-size:13.5px;color:var(--ink-2);max-width:60ch}
+.marks{display:flex;flex-wrap:wrap;gap:6px}
+.mark{display:inline-flex;border:1px solid var(--rule);border-radius:999px;overflow:hidden}
+.chip{background:var(--field);border:0;padding:2px 10px;cursor:pointer;font-size:14px}
+.chip.add{border:1px dashed var(--ink-2);border-radius:999px;background:none;color:var(--ink-2)}
+.mark .x{background:none;border:0;border-left:1px solid var(--rule);padding:0 8px;cursor:pointer;color:var(--ink-2)}
+.btnrow{display:flex;gap:8px}
+main{display:grid;grid-template-rows:minmax(0,1fr) 236px;min-height:0;min-width:0}
+#view{position:relative;min-height:0;background:#07080a}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#gl:active{cursor:grabbing}
+#refine{position:absolute;left:14px;bottom:10px;color:#b9bec6;font-size:13px;pointer-events:none}
+.help{position:absolute;right:14px;bottom:10px;color:#8d939c;font-size:13px;pointer-events:none}
+#glerr{position:absolute;inset:auto 16px 16px 16px;background:var(--panel);color:var(--bad);padding:10px 14px;border-radius:6px}
+.strip{display:grid;grid-template-columns:minmax(0,1fr) 330px;border-top:1px solid var(--rule);background:var(--panel);min-height:0}
+#maskbox{position:relative;margin:12px 14px 10px;min-width:0;min-height:0}
+#mask{position:absolute;inset:0}
+.report{border-left:1px solid var(--rule);padding:10px 14px;overflow:auto;min-height:0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:2px 4px;text-align:right}
+th[scope=row]{text-align:left;font-weight:400;color:var(--ink-2)}
+th[scope=col]{font-weight:600}
+td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:var(--warn);font-weight:600} td.odd{color:var(--odd);font-weight:600}
+#notes{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;font-size:13.5px}
+#notes li{padding-left:12px;position:relative;max-width:60ch}
+#notes li::before{content:"";position:absolute;left:0;top:.45em;width:6px;height:6px;border-radius:50%;background:var(--ink-2)}
+#notes li.bad{color:var(--bad)} #notes li.bad::before{background:var(--bad)}
+#notes li.warn::before{background:var(--warn)} #notes li.ok::before{background:var(--ok)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--ink-2);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px var(--rule)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 16px;border-radius:6px;font-size:14px;z-index:5;max-width:90vw}
+#toast.bad{background:var(--bad);color:#fff}
+@media (max-width:900px){
+  .app{display:flex;flex-direction:column;height:auto}
+  header{order:0;gap:10px}
+  main{order:1;grid-template-rows:62vh auto}
+  aside{order:2}
+  .strip{grid-template-columns:1fr}
+  #maskbox{height:200px}
+  .report{border-left:0;border-top:1px solid var(--rule)}
+  aside{border-right:0;border-top:1px solid var(--rule)}
+  .help{display:none}
+}
+@media (prefers-reduced-motion:reduce){summary::after{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1 class="mark-word"><b>Tenebrae</b><span>two-shell shadow lamps</span></h1>
+    <select id="preset" aria-label="Load a preset"><option value="" disabled selected>Load a preset</option></select>
+    <div class="seg" role="group" aria-label="Camera">
+      <button data-view="room" aria-pressed="true">Room</button><button data-view="wall">Wall</button><button data-view="ceiling">Ceiling</button><button data-view="lamp">Lamp</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="loadjson">Open design</button>
+    <button class="btn" id="savejson">Save design</button>
+    <button class="btn primary" id="export">Export print files</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </header>
+  <aside id="side" aria-label="Design controls"></aside>
+  <main>
+    <div id="view">
+      <canvas id="gl" aria-label="Room preview. Drag to orbit, right-drag or shift-drag to pan, scroll to zoom."></canvas>
+      <div id="refine"></div>
+      <div class="help">Drag to orbit, right-drag to pan, scroll to zoom</div>
+      <div id="glerr" hidden>This browser has no WebGL2, so the room preview is off. Pattern checks and export still work.</div>
+    </div>
+    <div class="strip">
+      <div id="maskbox"><canvas id="mask" aria-label="Unwrapped shell patterns"></canvas></div>
+      <div class="report">
+        <table id="checks" aria-label="Fabrication checks"></table>
+        <div class="legend"><span><i style="background:#f4d6a0"></i>Open</span><span><i style="background:#343940"></i>Solid</span><span><i style="background:#c93b3b"></i>Removed island</span><span><i style="background:#e6781e"></i>Thin web</span><span><i style="background:#8c6ef0"></i>Undersized hole, filled</span></div>
+        <ul id="notes"></ul>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+<script>
+/*CORE*/
+</script>
+</body>
+</html>
