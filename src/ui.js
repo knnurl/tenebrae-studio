@@ -42,7 +42,29 @@
       row.append(lb);
     }
     row.append(rng); parent.append(row);
+    if (TOUCH) touchDrag(row, rng, set);
     return { set };
+  }
+  // On touch screens a native range jumps to wherever the finger lands, so every scroll that starts on a
+  // slider changed the design. There the range ignores touches (CSS) and its row takes them instead:
+  // vertical swipes scroll the page, horizontal drags move the value relative to where it was.
+  const TOUCH = matchMedia('(pointer: coarse)').matches;
+  function touchDrag(row, rng, set) {
+    let d = null;
+    row.addEventListener('pointerdown', e => {
+      if (e.target.closest('input[type=number], button')) return;
+      d = { id: e.pointerId, x: e.clientX, y: e.clientY, v: +rng.value, on: false };
+    });
+    row.addEventListener('pointermove', e => {
+      if (!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (!d.on) { if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return; d.on = true; row.setPointerCapture(e.pointerId); }
+      rng.value = d.v + dx / rng.clientWidth * (rng.max - rng.min);
+      set(rng.value, false);
+    });
+    const end = e => { if (d && e.pointerId === d.id && d.on) set(rng.value, true); d = null; };
+    row.addEventListener('pointerup', end);
+    row.addEventListener('pointercancel', end);
   }
   const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   function select(parent, label, obj, key, options, kind, rerender, after) {
@@ -494,8 +516,11 @@
       const x = k * (colW + gap), img = maskImg[k], g = G[k];
       cx.fillStyle = cs.getPropertyValue('--ink-2'); cx.font = '500 13px "Barlow Semi Condensed", system-ui, sans-serif';
       const parts = g && g.ok ? [g.capB && 'bottom cap', 'wall', g.cap && 'top cap'].filter(Boolean) : [];
-      const title = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped' + (parts.length > 1 ? ': ' + parts.join(', ') + ', bottom to top' : '') + (g && g.ok && g.split ? '; two halves' : '');
-      cx.fillText(title, x, 13);
+      // Longest title that fits the column; phones only have room for the name.
+      const name = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped', half = g && g.ok && g.split ? '; two halves' : '';
+      const ps = parts.length > 1 ? ': ' + parts.join(', ') : '';
+      const titles = [name + ps + (ps ? ', bottom to top' : '') + half, name + ps + half, name + ps, name + half];
+      cx.fillText(titles.find(t => cx.measureText(t).width <= colW) || name, x, 13);
       if (!img) { cx.fillText('Fix the errors on the right to see the pattern.', x, 40); return; }
       const ah = h - lab - 4, sc = Math.min(colW / img.width, ah / img.height);
       const dw = img.width * sc, dh = img.height * sc;
