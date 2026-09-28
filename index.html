@@ -94,16 +94,26 @@ td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:va
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px var(--rule)}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 16px;border-radius:6px;font-size:14px;z-index:5;max-width:90vw}
 #toast.bad{background:var(--bad);color:#fff}
+/* Phones and narrow tablets: one page scroll. The preview sticks to the top so slider changes stay visible,
+   the controls follow it, and the checks strip goes last. The sidebar must not be its own scroller here:
+   with overscroll-behavior:contain it swallows swipes instead of passing them to the page. */
 @media (max-width:900px){
   .app{display:flex;flex-direction:column;height:auto}
+  main{display:contents}
   header{order:0;gap:10px}
-  main{order:1;grid-template-rows:62vh auto}
-  aside{order:2}
-  .strip{grid-template-columns:1fr}
-  #maskbox{height:200px}
+  #view{order:1;position:sticky;top:env(safe-area-inset-top,0px);z-index:2;height:40vh;height:40svh}
+  aside{order:2;overflow:visible;overscroll-behavior:auto;border-right:0}
+  .level{position:static}
+  .strip{order:3;grid-template-columns:1fr}
+  #maskbox{height:120px}
   .report{border-left:0;border-top:1px solid var(--rule)}
-  aside{border-right:0;border-top:1px solid var(--rule)}
+  .ctl input[type=range]{height:28px}
   .help{display:none}
+}
+/* Touch: sliders are dragged through their row (see touchDrag in ui.js), so a swipe over one scrolls the page. */
+@media (pointer:coarse){
+  .ctl{touch-action:pan-y}
+  .ctl input[type=range]{pointer-events:none}
 }
 @media (prefers-reduced-motion:reduce){summary::after{transition:none}}
 </style>
@@ -1425,7 +1435,29 @@ function createRenderer(canvas) {
       row.append(lb);
     }
     row.append(rng); parent.append(row);
+    if (TOUCH) touchDrag(row, rng, set);
     return { set };
+  }
+  // On touch screens a native range jumps to wherever the finger lands, so every scroll that starts on a
+  // slider changed the design. There the range ignores touches (CSS) and its row takes them instead:
+  // vertical swipes scroll the page, horizontal drags move the value relative to where it was.
+  const TOUCH = matchMedia('(pointer: coarse)').matches;
+  function touchDrag(row, rng, set) {
+    let d = null;
+    row.addEventListener('pointerdown', e => {
+      if (e.target.closest('input[type=number], button')) return;
+      d = { id: e.pointerId, x: e.clientX, y: e.clientY, v: +rng.value, on: false };
+    });
+    row.addEventListener('pointermove', e => {
+      if (!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (!d.on) { if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return; d.on = true; row.setPointerCapture(e.pointerId); }
+      rng.value = d.v + dx / rng.clientWidth * (rng.max - rng.min);
+      set(rng.value, false);
+    });
+    const end = e => { if (d && e.pointerId === d.id && d.on) set(rng.value, true); d = null; };
+    row.addEventListener('pointerup', end);
+    row.addEventListener('pointercancel', end);
   }
   const LOCK_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
   function select(parent, label, obj, key, options, kind, rerender, after) {
@@ -1877,8 +1909,11 @@ function createRenderer(canvas) {
       const x = k * (colW + gap), img = maskImg[k], g = G[k];
       cx.fillStyle = cs.getPropertyValue('--ink-2'); cx.font = '500 13px "Barlow Semi Condensed", system-ui, sans-serif';
       const parts = g && g.ok ? [g.capB && 'bottom cap', 'wall', g.cap && 'top cap'].filter(Boolean) : [];
-      const title = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped' + (parts.length > 1 ? ': ' + parts.join(', ') + ', bottom to top' : '') + (g && g.ok && g.split ? '; two halves' : '');
-      cx.fillText(title, x, 13);
+      // Longest title that fits the column; phones only have room for the name.
+      const name = (k ? 'Outer shell' : 'Inner shell') + ', unwrapped', half = g && g.ok && g.split ? '; two halves' : '';
+      const ps = parts.length > 1 ? ': ' + parts.join(', ') : '';
+      const titles = [name + ps + (ps ? ', bottom to top' : '') + half, name + ps + half, name + ps, name + half];
+      cx.fillText(titles.find(t => cx.measureText(t).width <= colW) || name, x, 13);
       if (!img) { cx.fillText('Fix the errors on the right to see the pattern.', x, 40); return; }
       const ah = h - lab - 4, sc = Math.min(colW / img.width, ah / img.height);
       const dw = img.width * sc, dh = img.height * sc;
