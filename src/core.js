@@ -783,4 +783,57 @@ function twistPeriods(patB, capB) {
   return { wall: per(patB), cap: per(capB) };
 }
 
-if (typeof module !== 'undefined') module.exports = { twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };
+// ---------- CAD profiles (revolved cross-sections, for native bodies in CAD) ----------
+// Each part is a closed (r, z) outline, counter-clockwise, revolved about z. It is the blank shell:
+// same faces, caps, bores, joint and seam planes as the printed part, without the pattern.
+// Segments: {type:'line', a, b} or {type:'arc', a, m, b, radius} (arcs are centred on the origin).
+function shellProfile(G, part) {
+  const { sph, R, t, Ro } = G, zBot = G.zBot, zTop = G.zTop;
+  const rAt = (Rs, z) => sph ? Math.sqrt(Math.max(0, Rs * Rs - z * z)) : Rs;
+  const segs = [], P = (r, z) => [+r.toFixed(6), +z.toFixed(6)];
+  const line = (a, b) => { if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-9) segs.push({ type: 'line', a: P(...a), b: P(...b) }); };
+  const face = (Rs, z0, z1) => { // outer or inner face between two heights, in the direction z0 -> z1
+    const a = [rAt(Rs, z0), z0], b = [rAt(Rs, z1), z1];
+    if (!sph) return line(a, b);
+    const ang = (Math.atan2(z0, a[0]) + Math.atan2(z1, b[0])) / 2;
+    segs.push({ type: 'arc', a: P(...a), m: P(Rs * Math.cos(ang), Rs * Math.sin(ang)), b: P(...b), radius: Rs });
+  };
+  const suf = part.suffix || '';
+  if (suf === 'top-cap' || suf === 'bottom-cap') { // flat disc, full outer diameter, one wall thick
+    const top = suf === 'top-cap', b = top ? G.boreT : G.boreB, z0 = top ? zTop - t : zBot, z1 = z0 + t;
+    line([b, z0], [Ro, z0]); line([Ro, z0], [Ro, z1]); line([Ro, z1], [b, z1]); line([b, z1], [b, z0]);
+    return segs;
+  }
+  // End types for a tube or cup: {cap:true, zo, zi, bore} or {cap:false, z} (open end, seam or joint plane).
+  let lo = G.capB ? { cap: true, zo: zBot, zi: zBot + t, bore: G.boreB } : { cap: false, z: zBot };
+  let hi = G.cap ? { cap: true, zo: zTop, zi: zTop - t, bore: G.boreT } : { cap: false, z: zTop };
+  if (suf === 'wall') { if (G.sepB) lo = { cap: false, z: zBot + t }; if (G.sepT) hi = { cap: false, z: zTop - t }; }
+  if (suf === 'lower') hi = { cap: false, z: 0 };
+  if (suf === 'upper') lo = { cap: false, z: 0 };
+  const zoLo = lo.cap ? lo.zo : lo.z, zoHi = hi.cap ? hi.zo : hi.z, ziLo = lo.cap ? lo.zi : lo.z, ziHi = hi.cap ? hi.zi : hi.z;
+  // bottom: along the outer plane (cap) or across the end ring (open), then up the outer face
+  if (lo.cap) line([lo.bore, zoLo], [rAt(Ro, zoLo), zoLo]); else line([rAt(R, zoLo), zoLo], [rAt(Ro, zoLo), zoLo]);
+  face(Ro, zoLo, zoHi);
+  // top: in along the outer plane, down the bore (or the axis), out along the inner plane; or across the end ring
+  if (hi.cap) { line([rAt(Ro, zoHi), zoHi], [hi.bore, zoHi]); line([hi.bore, zoHi], [hi.bore, ziHi]); line([hi.bore, ziHi], [rAt(R, ziHi), ziHi]); }
+  else line([rAt(Ro, zoHi), zoHi], [rAt(R, zoHi), zoHi]);
+  face(R, ziHi, ziLo);
+  if (lo.cap) { line([rAt(R, ziLo), ziLo], [lo.bore, ziLo]); line([lo.bore, ziLo], [lo.bore, zoLo]); }
+  return segs;
+}
+// Volume of the solid swept by revolving a closed (r, z) outline about z: V = pi * |closed integral of r^2 dz|.
+function profileVolume(segs) {
+  let I = 0;
+  for (const s of segs) {
+    if (s.type === 'line') { const [r1, z1] = s.a, [r2, z2] = s.b; I += (z2 - z1) * (r1 * r1 + r1 * r2 + r2 * r2) / 3; }
+    else { const F = th => Math.sin(th) - Math.sin(th) ** 3 / 3, th0 = Math.atan2(s.a[1], s.a[0]), th1 = Math.atan2(s.b[1], s.b[0]); I += s.radius ** 3 * (F(th1) - F(th0)); }
+  }
+  return Math.PI * Math.abs(I);
+}
+// Every segment must start where the previous one ended, and the last must end where the first starts.
+function profileClosed(segs) {
+  for (let i = 0; i < segs.length; i++) { const a = segs[i].b, b = segs[(i + 1) % segs.length].a; if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-6) return false; }
+  return segs.length >= 3;
+}
+
+if (typeof module !== 'undefined') module.exports = { shellProfile, profileVolume, profileClosed, twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };

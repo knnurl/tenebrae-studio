@@ -937,6 +937,59 @@ function twistPeriods(patB, capB) {
   return { wall: per(patB), cap: per(capB) };
 }
 
+// ---------- CAD profiles (revolved cross-sections, for native bodies in CAD) ----------
+// Each part is a closed (r, z) outline, counter-clockwise, revolved about z. It is the blank shell:
+// same faces, caps, bores, joint and seam planes as the printed part, without the pattern.
+// Segments: {type:'line', a, b} or {type:'arc', a, m, b, radius} (arcs are centred on the origin).
+function shellProfile(G, part) {
+  const { sph, R, t, Ro } = G, zBot = G.zBot, zTop = G.zTop;
+  const rAt = (Rs, z) => sph ? Math.sqrt(Math.max(0, Rs * Rs - z * z)) : Rs;
+  const segs = [], P = (r, z) => [+r.toFixed(6), +z.toFixed(6)];
+  const line = (a, b) => { if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-9) segs.push({ type: 'line', a: P(...a), b: P(...b) }); };
+  const face = (Rs, z0, z1) => { // outer or inner face between two heights, in the direction z0 -> z1
+    const a = [rAt(Rs, z0), z0], b = [rAt(Rs, z1), z1];
+    if (!sph) return line(a, b);
+    const ang = (Math.atan2(z0, a[0]) + Math.atan2(z1, b[0])) / 2;
+    segs.push({ type: 'arc', a: P(...a), m: P(Rs * Math.cos(ang), Rs * Math.sin(ang)), b: P(...b), radius: Rs });
+  };
+  const suf = part.suffix || '';
+  if (suf === 'top-cap' || suf === 'bottom-cap') { // flat disc, full outer diameter, one wall thick
+    const top = suf === 'top-cap', b = top ? G.boreT : G.boreB, z0 = top ? zTop - t : zBot, z1 = z0 + t;
+    line([b, z0], [Ro, z0]); line([Ro, z0], [Ro, z1]); line([Ro, z1], [b, z1]); line([b, z1], [b, z0]);
+    return segs;
+  }
+  // End types for a tube or cup: {cap:true, zo, zi, bore} or {cap:false, z} (open end, seam or joint plane).
+  let lo = G.capB ? { cap: true, zo: zBot, zi: zBot + t, bore: G.boreB } : { cap: false, z: zBot };
+  let hi = G.cap ? { cap: true, zo: zTop, zi: zTop - t, bore: G.boreT } : { cap: false, z: zTop };
+  if (suf === 'wall') { if (G.sepB) lo = { cap: false, z: zBot + t }; if (G.sepT) hi = { cap: false, z: zTop - t }; }
+  if (suf === 'lower') hi = { cap: false, z: 0 };
+  if (suf === 'upper') lo = { cap: false, z: 0 };
+  const zoLo = lo.cap ? lo.zo : lo.z, zoHi = hi.cap ? hi.zo : hi.z, ziLo = lo.cap ? lo.zi : lo.z, ziHi = hi.cap ? hi.zi : hi.z;
+  // bottom: along the outer plane (cap) or across the end ring (open), then up the outer face
+  if (lo.cap) line([lo.bore, zoLo], [rAt(Ro, zoLo), zoLo]); else line([rAt(R, zoLo), zoLo], [rAt(Ro, zoLo), zoLo]);
+  face(Ro, zoLo, zoHi);
+  // top: in along the outer plane, down the bore (or the axis), out along the inner plane; or across the end ring
+  if (hi.cap) { line([rAt(Ro, zoHi), zoHi], [hi.bore, zoHi]); line([hi.bore, zoHi], [hi.bore, ziHi]); line([hi.bore, ziHi], [rAt(R, ziHi), ziHi]); }
+  else line([rAt(Ro, zoHi), zoHi], [rAt(R, zoHi), zoHi]);
+  face(R, ziHi, ziLo);
+  if (lo.cap) { line([rAt(R, ziLo), ziLo], [lo.bore, ziLo]); line([lo.bore, ziLo], [lo.bore, zoLo]); }
+  return segs;
+}
+// Volume of the solid swept by revolving a closed (r, z) outline about z: V = pi * |closed integral of r^2 dz|.
+function profileVolume(segs) {
+  let I = 0;
+  for (const s of segs) {
+    if (s.type === 'line') { const [r1, z1] = s.a, [r2, z2] = s.b; I += (z2 - z1) * (r1 * r1 + r1 * r2 + r2 * r2) / 3; }
+    else { const F = th => Math.sin(th) - Math.sin(th) ** 3 / 3, th0 = Math.atan2(s.a[1], s.a[0]), th1 = Math.atan2(s.b[1], s.b[0]); I += s.radius ** 3 * (F(th1) - F(th0)); }
+  }
+  return Math.PI * Math.abs(I);
+}
+// Every segment must start where the previous one ended, and the last must end where the first starts.
+function profileClosed(segs) {
+  for (let i = 0; i < segs.length; i++) { const a = segs[i].b, b = segs[(i + 1) % segs.length].a; if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-6) return false; }
+  return segs.length >= 3;
+}
+
 
 // ===== Tenebrae state: defaults, presets, effective patterns =====
 function mkCap(opt) {
@@ -1391,6 +1444,8 @@ function createRenderer(canvas) {
   return { gl, floatOK, setRoom, setShell, setEmitter, targets, draw, present, size: () => [W, H] };
 }
 
+// Filled in by tools/build.js from src/fusion/.
+const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a Tenebrae export and builds one revolved solid body per printed part:\n# the blank shell (faces, caps, bores, joint and seam planes) without the pattern, as true B-rep geometry.\n# Use the bodies to design stems, spiders, clips and mounts; send the patterned STLs to the slicer.\n#\n# Install: Utilities > Add-Ins > Scripts and Add-Ins > + (next to My Scripts) > pick this folder. Then Run.\nimport json\nimport math\nimport traceback\n\nimport adsk.core\nimport adsk.fusion\n\nMM = 0.1  # Fusion's API works in centimetres; profile.json is in millimetres\n\n\ndef run(context):\n    ui = None\n    try:\n        app = adsk.core.Application.get()\n        ui = app.userInterface\n        design = adsk.fusion.Design.cast(app.activeProduct)\n        if not design:\n            ui.messageBox('Open or create a design first.')\n            return\n        dlg = ui.createFileDialog()\n        dlg.title = 'Open profile.json from a Tenebrae export'\n        dlg.filter = 'Tenebrae profile (*.json)'\n        if dlg.showOpen() != adsk.core.DialogResults.DialogOK:\n            return\n        with open(dlg.filename) as f:\n            data = json.load(f)\n        if data.get('format') != 'tenebrae-profile-1':\n            ui.messageBox('This is not a Tenebrae profile.json.')\n            return\n\n        root = design.rootComponent\n        occ = root.occurrences.addNewComponent(adsk.core.Matrix3D.create())\n        comp = occ.component\n        comp.name = 'Tenebrae proxies'\n        report = []\n        for part in data['parts']:\n            body, vol = build_part(comp, part)\n            err = (vol - part['volume']) / part['volume'] * 100\n            report.append('{}: {:.0f} mm3 (profile {:.0f} mm3, {:+.3f}%)'.format(part['name'], vol, part['volume'], err))\n        ui.messageBox('Built {} bodies, axis = Z, light centre at the origin.\\n\\n{}'.format(len(data['parts']), '\\n'.join(report)))\n    except Exception:\n        if ui:\n            ui.messageBox('Tenebrae proxies failed:\\n{}'.format(traceback.format_exc()))\n\n\ndef build_part(comp, part):\n    sk = comp.sketches.add(comp.xZConstructionPlane)\n    sk.name = part['name']\n    sk.isComputeDeferred = True\n    to_sk = lambda q: sk.modelToSketchSpace(adsk.core.Point3D.create(q[0] * MM, 0, q[1] * MM))\n    lines, arcs = sk.sketchCurves.sketchLines, sk.sketchCurves.sketchArcs\n    first = prev = None\n    for seg in part['segments']:\n        if seg['type'] == 'line':\n            start = prev if prev is not None else to_sk(seg['a'])\n            curve = lines.addByTwoPoints(start, to_sk(seg['b']))\n            s, e = curve.startSketchPoint, curve.endSketchPoint\n        else:\n            curve = arcs.addByThreePoints(to_sk(seg['a']), to_sk(seg['m']), to_sk(seg['b']))\n            s, e = ends_in_order(curve, to_sk(seg['a']))\n            if prev is not None:\n                sk.geometricConstraints.addCoincident(prev, s)\n        if first is None:\n            first = s\n        prev = e\n    sk.geometricConstraints.addCoincident(prev, first)\n    sk.isComputeDeferred = False\n\n    prof = max((sk.profiles.item(i) for i in range(sk.profiles.count)),\n               key=lambda p: p.areaProperties().area)\n    revs = comp.features.revolveFeatures\n    inp = revs.createInput(prof, comp.zConstructionAxis, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)\n    inp.setAngleExtent(False, adsk.core.ValueInput.createByString('360 deg'))\n    feat = revs.add(inp)\n    feat.name = part['name']\n    body = feat.bodies.item(0)\n    body.name = part['name']\n    return body, body.volume / (MM ** 3)\n\n\ndef ends_in_order(arc, start_pt):\n    s, e = arc.startSketchPoint, arc.endSketchPoint\n    d = lambda p: p.geometry.distanceTo(start_pt)\n    return (s, e) if d(s) <= d(e) else (e, s)\n", FUSION_MANIFEST = "{\n  \"autodeskProduct\": \"Fusion360\",\n  \"type\": \"script\",\n  \"author\": \"Tenebrae\",\n  \"description\": { \"\": \"Builds native revolved bodies for each Tenebrae shell part from profile.json, for designing mating parts.\" },\n  \"supportedOS\": \"windows|mac\",\n  \"editEnabled\": true\n}\n";
 // ===== Tenebrae UI =====
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
@@ -2065,6 +2120,17 @@ function createRenderer(canvas) {
       const enc = new TextEncoder();
       files.push({ name: 'design.json', data: enc.encode(JSON.stringify(S, null, 2)) });
       files.push({ name: 'interface.json', data: enc.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
+      // CAD profiles: one revolved outline per printed part, plus the Fusion script that turns them into bodies
+      const profParts = [];
+      for (const k of [0, 1]) for (const part of G[k].parts) {
+        const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}`, segments = shellProfile(G[k], part);
+        if (!profileClosed(segments)) { allOK = false; report.push(`${name} profile: CHECK FAILED (outline not closed)`); }
+        profParts.push({ name, stl: name + '.stl', volume: +profileVolume(segments).toFixed(3), segments });
+      }
+      report.push(`profile.json: ${profParts.length} blank-shell outlines for CAD (fusion/tenebrae_proxies builds them as bodies)`);
+      files.push({ name: 'profile.json', data: enc.encode(JSON.stringify({ format: 'tenebrae-profile-1', units: 'mm', axis: 'z', note: 'Closed (r, z) outlines, revolved 360 degrees about z. Blank shells: same faces, caps, bores, joint and seam planes as the STLs, without the pattern. Arcs are centred on the origin.', parts: profParts }, null, 1)) });
+      files.push({ name: 'fusion/tenebrae_proxies/tenebrae_proxies.py', data: enc.encode(FUSION_PY) });
+      files.push({ name: 'fusion/tenebrae_proxies/tenebrae_proxies.manifest', data: enc.encode(FUSION_MANIFEST) });
       files.push({ name: 'checks.txt', data: enc.encode(report.join('\n') + '\n') });
       btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
       const blob = new Blob(zipStore(files), { type: 'application/zip' });

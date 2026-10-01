@@ -49,6 +49,7 @@ Light reaches the room only where both shells are open along the ray from the LE
 
 **Export**
 - One zip: an STL per shell (or per half), `design.json`, `interface.json` for CAD, `checks.txt`.
+- `profile.json` and a Fusion script that build every part as a native solid body: the blank shell, with the same caps, bores, joint and seam planes as its STL. Design mating parts against these instead of converting the meshes.
 - Every mesh is checked edge-manifold, with genus matching its hole count, before it is packed.
 
 ---
@@ -95,7 +96,20 @@ design.json         reopen with Open design
 interface.json      end diameters, cap planes, hub and bore radii, stem side, closest gap,
                     required clearance, twist periods, bookmarks
 checks.txt          triangle counts, watertight results, hole and web counts, notes
+profile.json        one closed (r, z) outline per part, revolved about z: the blank shell for CAD
+fusion/tenebrae_proxies/
+                    Fusion script that reads profile.json and builds one solid body per part
 ```
+
+### Mating parts in Fusion
+
+Don't convert the patterned STLs to bodies: at hundreds of thousands of triangles the conversion is slow and the result has one face per triangle. Instead:
+
+1. **Utilities > Add-Ins > Scripts and Add-Ins**, click **+** next to *My Scripts*, and pick the `fusion/tenebrae_proxies` folder from the export.
+2. Run **tenebrae_proxies** and choose `profile.json`. It adds a *Tenebrae proxies* component with one body per part, named like the STLs, and reports each body's volume against the profile.
+3. Design stems, spiders, clips and hubs against these bodies. Insert the patterned STL as a mesh only to check the look.
+
+The shell axis is model Z with the light centre at the origin; in a Y-up design the lamp lies on its side. Each body's sketch stays in the timeline, so dimensions can be checked there. The proxies leave out the pattern and the one-grid-cell chamfer where a wall meets a cap.
 
 Units are millimetres, with the light centre at the origin and z up. Binary STL runs about 50 MB per million triangles; the table-uplight preset is about 0.73 M triangles (roughly 36 MB) for both shells at the 0.7 mm grid.
 
@@ -113,6 +127,7 @@ src/
   ui.js               sidebar, checks, camera, randomize, export
   template.html       page shell and styles
   tutorial.html       tutorial source ({{TOOL}} is replaced at build time)
+  fusion/             Fusion script and manifest, inlined into index.html at build time
 tools/
   build.js            builds index.html and tutorial.html from src/
   test.js             geometry test harness

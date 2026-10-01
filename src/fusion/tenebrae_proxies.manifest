@@ -1,0 +1,8 @@
+{
+  "autodeskProduct": "Fusion360",
+  "type": "script",
+  "author": "Tenebrae",
+  "description": { "": "Builds native revolved bodies for each Tenebrae shell part from profile.json, for designing mating parts." },
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

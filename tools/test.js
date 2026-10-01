@@ -3,7 +3,7 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const root = path.join(__dirname, '..'), strip = f => fs.readFileSync(path.join(root, 'src', f), 'utf8').replace(/\nif \(typeof module[\s\S]*$/, '\n');
 const bundlePath = path.join(os.tmpdir(), 'tenebrae-bundle.js');
-fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
+fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
 const X = require(bundlePath);
 let fails = 0;
 const check = (name, cond, info='') => { console.log((cond?'PASS ':'FAIL ')+name+(info?'  '+info:'')); if(!cond) fails++; };
@@ -196,6 +196,71 @@ for (const pr of X.PRESETS) {
     const res = g.parts.map(p => { const c = X.checkMesh(X.buildMesh(g, p), p.holes, p.ends); return `${p.suffix}:${c.ok ? 'ok' : 'FAIL'}`; });
     check(`default design, separate caps, ${k ? 'outer' : 'inner'}`, g.ok && res.every(r => r.endsWith('ok')) && res.length === 3, res.join(' '));
   }
+}
+
+// CAD profiles: closed outlines whose planes match the printed meshes and whose revolved volume matches the blank mesh
+{
+  const sv = (m) => { const p=m.positions, ix=m.indices; let v=0; for (let t=0;t<ix.length;t+=3){const a=ix[t]*3,b=ix[t+1]*3,c=ix[t+2]*3; v += (p[a]*(p[b+1]*p[c+2]-p[b+2]*p[c+1]) - p[a+1]*(p[b]*p[c+2]-p[b+2]*p[c]) + p[a+2]*(p[b]*p[c+1]-p[b+1]*p[c]))/6;} return v; };
+  const zr = m => { let lo=Infinity, hi=-Infinity; for (let i=2;i<m.positions.length;i+=3){ lo=Math.min(lo,m.positions[i]); hi=Math.max(hi,m.positions[i]); } return [lo,hi]; };
+  const pz = segs => { let lo=Infinity, hi=-Infinity; for (const s of segs) for (const q of [s.a,s.b]) { lo=Math.min(lo,q[1]); hi=Math.max(hi,q[1]); } return [lo,hi]; };
+  const blank = {gen:'slots', invert:false, phase:0, params:{N:3,twist:0,wobA:0,wobK:0,duty:0.0001}};
+  const slots = {gen:'slots', invert:false, phase:0, params:{N:24,twist:0.6,wobA:0,wobK:0,duty:0.4}};
+  const cyl = () => ({ shape:'cylinder', R:50, t:3, zBot:-90, zTop:110, rimBot:6, rimTop:6, cap: X.mkCap({on:true, hub:22}), capBot: X.mkCap({on:true, hub:22}) });
+  const sph = () => ({ shape:'sphere', R:60, t:3.5, zBot:-50, zTop:50, rimBot:6, rimTop:6, cap: X.mkCap({on:true, hub:12}), capBot: X.mkCap({on:true, hub:12, bore:5}) });
+  const cases = [];
+  for (const [bT,bB] of [[0,0],[6,0],[0,6],[6,4.5]]) for (const [sep, split] of [[false,false],[false,true],[true,false]]) {
+    const sh = cyl(); sh.cap.bore=bT; sh.capBot.bore=bB; cases.push([`cylinder bores ${bT}/${bB}${sep?' separate caps':''}${split?' split':''}`, sh, {split, capsSeparate:sep}]);
+  }
+  { const sh = cyl(); sh.cap.on=false; sh.capBot.on=false; cases.push(['open cylinder', sh, {split:false}]); }
+  { const sh = cyl(); sh.capBot.on=false; sh.cap.bore=6; cases.push(['top-capped cylinder, open bottom', sh, {split:false}]); cases.push(['top-capped cylinder, separate cap', JSON.parse(JSON.stringify(sh)), {split:false, capsSeparate:true}]); }
+  cases.push(['capped sphere, split', sph(), {split:true, fdm:true}]);
+  { const sh = sph(); sh.cap.on=false; sh.capBot.on=false; cases.push(['open sphere', sh, {split:false}]); }
+  for (const [label, sh, o] of cases) {
+    const base = {res:0.5,minWeb:2,minHole:3,seam:4};
+    const GB = X.buildShell(sh, blank, Object.assign({}, base, o, {capPattern:blank, capBotPattern:blank}));
+    const GP = X.buildShell(sh, slots, Object.assign({}, base, o, {res:0.7, capPattern:slots, capFollow:true, capBotPattern:slots, capBotFollow:true}));
+    if (!GB.ok || !GP.ok) { check(`profile ${label}: builds`, false, GB.errors.concat(GP.errors).join('; ')); continue; }
+    const info = []; let ok = GB.parts.length === GP.parts.length;
+    GB.parts.forEach((p, i) => {
+      const segs = X.shellProfile(GB, p), closed = X.profileClosed(segs);
+      const vB = sv(X.buildMesh(GB, p)), vP = X.profileVolume(segs), err = (vP - vB) / vB;
+      const [a0,a1] = pz(segs), [m0,m1] = zr(X.buildMesh(GP, GP.parts[i]));
+      const planes = Math.abs(a0-m0) < 1e-4 && Math.abs(a1-m1) < 1e-4;
+      const good = closed && Math.abs(err) < 0.005 && planes && segs.length < 20;
+      ok = ok && good;
+      info.push(`${p.suffix||'whole'}: ${closed?'closed':'OPEN'} vol err ${(err*100).toFixed(3)}% z ${a0.toFixed(2)}..${a1.toFixed(2)} vs mesh ${m0.toFixed(2)}..${m1.toFixed(2)}`);
+    });
+    check(`profile ${label}`, ok, info.join('; '));
+  }
+
+  // every preset, both shells, as exported (split and separate caps as the studio would choose them)
+  for (const pr of X.PRESETS) for (const sepCaps of [false, true]) {
+    const st = pr.make(), pats = X.effectivePatterns(st), caps = X.effectiveCaps(st), capsB = X.effectiveCapsBot(st);
+    let ok = true; const bad = [];
+    for (const k of [0,1]) {
+      const sh = st.shells[k], sep = sepCaps && sh.shape === 'cylinder' && (sh.cap.on || sh.capBot.on);
+      const split = (sh.shape === 'sphere' && st.process.split) || (k === 1 && sh.cap.on && sh.capBot.on && !sep);
+      const G = X.buildShell(sh, pats[k], {res:1.2,fillSmall:true,minWeb:2,minHole:3,split,seam:4,mirror:k===1&&st.link.mirror,capPattern:caps[k],capFollow:X.capFollows(st,k),capBotPattern:capsB[k],capBotFollow:X.capFollowsBot(st,k),capsSeparate:sepCaps,fdm:true});
+      if (!G.ok) continue;
+      for (const p of G.parts) {
+        const segs = X.shellProfile(G, p), [a0,a1] = pz(segs), [m0,m1] = zr(X.buildMesh(G, p));
+        if (!X.profileClosed(segs) || Math.abs(a0-m0) > 1e-4 || Math.abs(a1-m1) > 1e-4) { ok = false; bad.push(`shell${k} ${p.suffix||'whole'} ${a0.toFixed(2)}..${a1.toFixed(2)} vs ${m0.toFixed(2)}..${m1.toFixed(2)}`); }
+      }
+    }
+    check(`profile planes match meshes: ${pr.name}${sepCaps?' (separate caps)':''}`, ok, bad.join('; '));
+  }
+  // exact volume for a blank capped cylinder with bores (no faceting in the profile)
+  const sh = cyl(); sh.cap.bore = 6; sh.capBot.bore = 4.5;
+  const G = X.buildShell(sh, blank, {res:0.7,minWeb:2,minHole:3,split:false,seam:4,capPattern:blank,capBotPattern:blank});
+  const Ro = sh.R+sh.t, exact = Math.PI*(Ro*Ro-sh.R*sh.R)*(sh.zTop-sh.zBot) + Math.PI*(sh.R*sh.R-36)*sh.t + Math.PI*(sh.R*sh.R-4.5*4.5)*sh.t;
+  const v = X.profileVolume(X.shellProfile(G, G.parts[0]));
+  check('profile volume is exact for a blank capped cylinder', Math.abs(v-exact)/exact < 1e-9, `${v.toFixed(3)} vs ${exact.toFixed(3)}`);
+  const s2 = { shape:'sphere', R:60, t:3, zBot:-40, zTop:40, rimBot:6, rimTop:6, cap: X.mkCap({on:false}), capBot: X.mkCap({on:false}) };
+  const G2 = X.buildShell(s2, blank, {res:0.7,minWeb:2,minHole:3,split:false,seam:4});
+  const slab = (r, z0, z1) => Math.PI*(r*r*(z1-z0) - (z1**3 - z0**3)/3);
+  const exact2 = slab(63, -40, 40) - slab(60, -40, 40);
+  const v2 = X.profileVolume(X.shellProfile(G2, G2.parts[0]));
+  check('profile volume is exact for an open sphere band', Math.abs(v2-exact2)/exact2 < 1e-7, `${v2.toFixed(3)} vs ${exact2.toFixed(3)}`);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 process.exit(fails ? 1 : 0);

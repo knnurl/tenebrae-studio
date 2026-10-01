@@ -1,3 +1,5 @@
+// Filled in by tools/build.js from src/fusion/.
+const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
 // ===== Tenebrae UI =====
 (function () {
   const $ = (s, r = document) => r.querySelector(s);
@@ -672,6 +674,17 @@
       const enc = new TextEncoder();
       files.push({ name: 'design.json', data: enc.encode(JSON.stringify(S, null, 2)) });
       files.push({ name: 'interface.json', data: enc.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
+      // CAD profiles: one revolved outline per printed part, plus the Fusion script that turns them into bodies
+      const profParts = [];
+      for (const k of [0, 1]) for (const part of G[k].parts) {
+        const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}`, segments = shellProfile(G[k], part);
+        if (!profileClosed(segments)) { allOK = false; report.push(`${name} profile: CHECK FAILED (outline not closed)`); }
+        profParts.push({ name, stl: name + '.stl', volume: +profileVolume(segments).toFixed(3), segments });
+      }
+      report.push(`profile.json: ${profParts.length} blank-shell outlines for CAD (fusion/tenebrae_proxies builds them as bodies)`);
+      files.push({ name: 'profile.json', data: enc.encode(JSON.stringify({ format: 'tenebrae-profile-1', units: 'mm', axis: 'z', note: 'Closed (r, z) outlines, revolved 360 degrees about z. Blank shells: same faces, caps, bores, joint and seam planes as the STLs, without the pattern. Arcs are centred on the origin.', parts: profParts }, null, 1)) });
+      files.push({ name: 'fusion/tenebrae_proxies/tenebrae_proxies.py', data: enc.encode(FUSION_PY) });
+      files.push({ name: 'fusion/tenebrae_proxies/tenebrae_proxies.manifest', data: enc.encode(FUSION_MANIFEST) });
       files.push({ name: 'checks.txt', data: enc.encode(report.join('\n') + '\n') });
       btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
       const blob = new Blob(zipStore(files), { type: 'application/zip' });
