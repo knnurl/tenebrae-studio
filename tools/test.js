@@ -3,7 +3,7 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const root = path.join(__dirname, '..'), strip = f => fs.readFileSync(path.join(root, 'src', f), 'utf8').replace(/\nif \(typeof module[\s\S]*$/, '\n');
 const bundlePath = path.join(os.tmpdir(), 'tenebrae-bundle.js');
-fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={fieldContours,flatParts,printedCap,svgOf,dxfOf,polyArea,shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
+fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={fieldContours,flatParts,printedCap,svgOf,dxfOf,polyArea,shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU,DEG};');
 const X = require(bundlePath);
 let fails = 0;
 const check = (name, cond, info='') => { console.log((cond?'PASS ':'FAIL ')+name+(info?'  '+info:'')); if(!cond) fails++; };
@@ -383,6 +383,35 @@ for (const pr of X.PRESETS) {
   const poly = [[q.outer + h, zL], [q.lipOuter, zL], [q.lipOuter, z1], [b0, z1], [b0, zc], [q.lipInner, zc], [q.lipInner, zL], [q.inner - h, zL], [q.inner, zL + h], [q.inner, zc], [q.outer, zc], [q.outer, zL + h]];
   const segs = poly.map((a, i) => ({ type: 'line', a, b: poly[(i + 1) % poly.length] })), exact = X.profileVolume(segs);
   check('printed: unpierced cap volume matches its cross-section', G.stats.holes === 0 && vol > 0 && Math.abs(vol - exact) / exact < 0.002, `vol=${vol.toFixed(1)} exact=${exact.toFixed(1)}`);
+}
+// FDM overhang check: twisted slots lean at atan(1 / twist) at lamp height; the check agrees with the meshed faces
+{
+  const d = X.defaultState(), pa = X.effectivePatterns(d), ca = X.effectiveCaps(d), cb = X.effectiveCapsBot(d), sh = d.shells[0];
+  const o = (sep, fdm) => ({res:d.res,fillSmall:true,minWeb:2,minHole:3,split:false,seam:4,mirror:false,capPattern:ca[0],capFollow:X.capFollows(d,0),capBotPattern:cb[0],capBotFollow:X.capFollowsBot(d,0),capsSeparate:sep,fdm});
+  const meshFlat = (G, bed) => { // area of mesh faces towards the bed flatter than 45 degrees, off the bed
+    const part = G.parts.find(p => p.suffix === 'wall'), m = X.buildMesh(G, part), p = m.positions, ix = m.indices, sg = bed === 'top' ? 1 : -1;
+    let zEnd = -sg * Infinity; for (let i = 2; i < p.length; i += 3) zEnd = sg > 0 ? Math.max(zEnd, p[i]) : Math.min(zEnd, p[i]);
+    let A = 0;
+    for (let i = 0; i < ix.length; i += 3) {
+      const a = ix[i] * 3, b = ix[i + 1] * 3, c = ix[i + 2] * 3, ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, L = Math.hypot(nx, ny, nz);
+      if (sg * nz / L > Math.cos(Math.PI / 4) && Math.abs((p[a + 2] + p[b + 2] + p[c + 2]) / 3 - zEnd) > 0.01) A += L / 2;
+    }
+    return A;
+  };
+  for (const tw of [1.47, 1.2, 1.0, 0.85, 0]) {
+    const pat = JSON.parse(JSON.stringify(pa[0])); pat.params.twist = tw;
+    const G = X.buildShell(sh, pat, o(true, true)), s = G.stats, want = Math.atan(1 / tw) / X.DEG, A = meshFlat(G, s.ohBed);
+    const angOK = tw > 1.0 ? s.overhang > 0 && Math.abs(s.ohFlat - want) < 1.5 : s.overhang === 0;
+    check(`overhang twist ${tw}: ${tw > 1 ? `flags slots leaning ${want.toFixed(1)} deg` : 'passes'}`, G.ok && angOK && (s.overhang > 0) === (A > 50) && (s.overhang > 0) === G.warnings.some(w => /overhang/.test(w)),
+      `runs=${s.overhang} flattest=${s.ohFlat.toFixed(1)} bed=${s.ohBed} mesh faces under 45 deg=${A.toFixed(0)} mm2`);
+  }
+  const G0 = X.buildShell(sh, pa[0], o(true, false));
+  check('overhang: not checked outside FDM', G0.stats.overhang === 0 && !G0.warnings.some(w => /overhang/.test(w)));
+  const GA = X.buildShell(Object.assign({}, sh, { capBot: Object.assign({}, sh.capBot, { on: false }) }), pa[0], o(false, true));
+  const GS = X.buildShell(sh, pa[0], Object.assign(o(false, true), { split: true }));
+  check('overhang: split halves are each checked cap-down', GS.split && GS.stats.ohBed === 'cap' && GS.stats.overhang > 0 && GS.warnings.some(w => /each half cap-down/.test(w)), `split=${GS.split} bed=${GS.stats.ohBed} runs=${GS.stats.overhang}`);
+  check('overhang: a shell with only its top cap attached is checked cap-down', GA.stats.ohBed === 'top' && GA.stats.overhang > 0, `bed=${GA.stats.ohBed}`);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 process.exit(fails ? 1 : 0);

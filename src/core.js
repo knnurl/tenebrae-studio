@@ -504,6 +504,50 @@ function buildShell(sh, pat, opts) {
   for (let k = 0; k < Nb * Nc; k++) if (thinLab.lab[k] >= 0) thinSize[thinLab.lab[k]]++;
   let thin = 0; for (let c = 0; c < thinLab.count; c++) if (thinSize[c] >= 4) thin++;
 
+  // FDM overhangs (cylinder walls): hole edges facing the bed flatter than 45 degrees, in runs too tall and wide
+  // to bridge. The edge's direction in the wall and the ray it is cut along give the true surface angle.
+  // Cap-down for a shell with an attached cap (each half cap-down when split), otherwise whichever end on the
+  // bed has fewer runs.
+  let overhang = 0, ohFlat = 90, ohLong = 0, ohBed = null;
+  if (opts.fdm && !sph) {
+    const cosLim = Math.cos(45 * DEG), runs = { bottom: [], top: [] }, mark = { bottom: new Uint8Array(Nb * Nc), top: new Uint8Array(Nb * Nc) }, ang = new Float32Array(Nb * Nc);
+    const f = (i, j) => field[j * Nc + (i + Nc) % Nc];
+    for (let j = 0; j < Nb - 1; j++) {
+      if (forced[j] || forced[j + 1] || bandS[j] < sWallLo || bandS[j + 1] > sWallHi) continue;
+      const dz = bandS[j + 1] - bandS[j], dx = dxRow[j], c = Math.cos((psi[j] + psi[j + 1]) / 2);
+      for (let i = 0; i < Nc; i++) {
+        const k = j * Nc + i, f0 = field[k], f1 = field[k + Nc];
+        if ((f0 >= 0) === (f1 >= 0) || (flags[k] | flags[k + Nc]) & 9) continue;
+        const gz = (f1 - f0) / dz, gx = (f(i + 1, j) - f(i - 1, j) + f(i + 1, j + 1) - f(i - 1, j + 1)) / (4 * dx), gl = Math.hypot(gx, gz);
+        const a = gz / gl, b = gx / gl, cosA = Math.abs(a) * c / Math.sqrt(a * a + b * b * c * c);
+        if (cosA <= cosLim) continue;
+        mark[f0 < 0 ? 'bottom' : 'top'][k] = 1; ang[k] = Math.acos(Math.min(1, cosA)) / DEG; // solid over a hole faces down
+      }
+    }
+    for (const end of ['bottom', 'top']) {
+      const L = labelComponents(Nb, Nc, k => mark[end][k] === 1, true), cols = Array.from({ length: L.count }, () => new Set()), flat = new Float32Array(L.count).fill(90);
+      for (let k = 0; k < Nb * Nc; k++) { const q = L.lab[k]; if (q >= 0) { cols[q].add(k % Nc); flat[q] = Math.min(flat[q], ang[k]); } }
+      for (let q = 0; q < L.count; q++) {
+        const w = cols[q].size * TAU * Ro / Nc, h = bandS[L.rowRange[2 * q + 1] + 1] - bandS[L.rowRange[2 * q]];
+        const lower = L.rowRange[2 * q + 1] < n1; // split shells: the lower half prints bottom down, the upper half top down
+        if (h >= 2 && w >= 10 && (!split || lower === (end === 'bottom'))) runs[end].push({ q, w, flat: flat[q], lab: L.lab });
+      }
+    }
+    const capDown = cap && !sepT ? (capB && !sepB ? null : 'top') : capB && !sepB ? 'bottom' : null;
+    ohBed = split ? 'cap' : capDown || (runs.top.length < runs.bottom.length ? 'top' : 'bottom');
+    const R0 = split ? runs.bottom.concat(runs.top) : runs[ohBed]; overhang = R0.length;
+    for (const r of R0) { ohFlat = Math.min(ohFlat, r.flat); ohLong = Math.max(ohLong, r.w); }
+    for (const end of ['bottom', 'top']) {
+      const mine = R0.filter(r => runs[end].includes(r)), hit = new Set(mine.map(r => r.q));
+      if (mine.length) for (let k = 0; k < Nb * Nc; k++) if (hit.has(mine[0].lab[k])) flags[k] |= 16;
+    }
+    if (overhang) {
+      const twMax = 1 / Math.tan(45 * DEG), tw = pat.gen === 'slots' && pat.params && Math.abs(pat.params.twist) > twMax;
+      warnings.push(`${overhang} overhang${overhang > 1 ? 's' : ''} lean flatter than 45° for FDM ${split ? 'with each half cap-down' : `with the ${ohBed} end on the bed`} (flattest ${ohFlat.toFixed(0)}°, widest ${ohLong.toFixed(0)} mm); they need supports. ` +
+        (tw ? `Keep the slot twist at or below ${twMax.toFixed(2)}, or print it SLS or resin.` : 'Steepen the holes, or print it SLS or resin.'));
+    } else if (!split && !capDown && runs[ohBed === 'top' ? 'bottom' : 'top'].length) warnings.push(`Print it with the ${ohBed} end on the bed; the other way up its holes overhang flatter than 45°.`);
+  }
+
   // Open area fraction of the band (outer face).
   let openA = 0, totA = 0;
   for (let j = 0; j < Nb; j++) {
@@ -560,7 +604,7 @@ function buildShell(sh, pat, opts) {
 
   Object.assign(G, {
     ok: errors.length === 0, sepT, sepB, sMid, n1, n2, Nb, Nc, sWallLo, sWallHi, sCapLo, sCapBHi, capHub: hubT, capBHub: hubB, bandS, rows, bandRowStart, field, flags, tex, forced, split, parts,
-    stats: { holes: voidLab.count, dropped, thin, small, filled, connected, open: openA / totA,
+    stats: { holes: voidLab.count, dropped, thin, small, filled, connected, open: openA / totA, overhang, ohFlat, ohLong, ohBed,
       estTris: estimateTris(rows.length, Nc, openA / totA) },
   });
   return G;

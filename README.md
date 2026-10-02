@@ -44,6 +44,7 @@ Light reaches the room only where both shells are open along the ray from the LE
 - Holes cut along rays from the light centre, so wall thickness never narrows the beam.
 - Islands with no path to a rim are removed. A pattern that cuts a shell into rings is blocked.
 - Thin webs found by morphological opening; holes too small to print anywhere are filled.
+- FDM overhangs on cylinder walls: hole edges facing the bed flatter than 45°, in runs too wide to bridge, with the bed end taken cap-down. Twisted slots lean at atan(1 / twist) at lamp height, so keep the twist at or below 1.00 to print without supports.
 - Clearance between shells, radially and between caps; the emitter must fit inside the inner shell.
 - FDM and SLS profiles. Spheres can be split at the equator with a solid seam band.
 

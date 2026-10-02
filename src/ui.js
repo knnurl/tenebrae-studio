@@ -367,7 +367,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         const pats = effectivePatterns(tmp), caps = effectiveCaps(tmp), capsB = effectiveCapsBot(tmp);
         const g = [0, 1].map(k => buildShell(tmp.shells[k], pats[k], optsFor(tmp, k, Math.max(1.0, S.res * 1.6), caps, capsB)));
         // filled holes count against a candidate: a pattern whose holes all got filled is not a lamp
-        const score = g.reduce((n, x) => n + (x.ok && x.stats.holes > 0 ? x.stats.thin + x.stats.small + x.stats.filled + x.stats.dropped : 1000), 0) + (clearanceGap(g[0], g[1]) < S.process.clearance ? 1000 : 0);
+        const score = g.reduce((n, x) => n + (x.ok && x.stats.holes > 0 ? x.stats.thin + x.stats.small + x.stats.filled + x.stats.dropped + x.stats.overhang : 1000), 0) + (clearanceGap(g[0], g[1]) < S.process.clearance ? 1000 : 0);
         if (score < bestScore) { bestScore = score; best = cand; }
         if (score === 0) break;
       }
@@ -405,7 +405,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   function makeHint() {
     if (!UI.makeNote) return;
     const bad = notes.filter(x => x.bad).length + [0, 1].filter(k => G[k] && !G[k].ok).length;
-    const flags = [0, 1].reduce((n, k) => n + (G[k] && G[k].stats ? G[k].stats.thin + G[k].stats.small : 0), 0);
+    const flags = [0, 1].reduce((n, k) => n + (G[k] && G[k].stats ? G[k].stats.thin + G[k].stats.small + G[k].stats.overhang : 0), 0);
     UI.makeNote.textContent = bad ? `${bad} blocking issue${bad > 1 ? 's' : ''}. See the notes under the checks table.` :
       flags ? `Exportable, with ${flags} flagged feature${flags > 1 ? 's' : ''} to review in the checks table.` : 'All checks pass. Export when the preview looks right.';
   }
@@ -519,7 +519,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   }
 
   // ---------- mask strip & checks ----------
-  const COL = { solid: [52, 57, 64], open: [244, 214, 160], drop: [201, 59, 59], thin: [230, 120, 30], small: [140, 110, 240] };
+  const COL = { solid: [52, 57, 64], open: [244, 214, 160], drop: [201, 59, 59], thin: [230, 120, 30], small: [140, 110, 240], over: [40, 170, 200] };
   const maskImg = [null, null];
   function drawMasks() {
     for (const k of [0, 1]) {
@@ -529,7 +529,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       const cx = c.getContext('2d'), im = cx.createImageData(g.Nc, g.Nb), d = im.data;
       for (let j = 0; j < g.Nb; j++) for (let i = 0; i < g.Nc; i++) {
         const k2 = j * g.Nc + i, f = g.flags[k2], o = ((g.Nb - 1 - j) * g.Nc + i) * 4;
-        const col = f & 1 ? COL.drop : f & 2 ? COL.thin : f & 12 ? COL.small : g.field[k2] < 0 ? COL.open : COL.solid;
+        const col = f & 1 ? COL.drop : f & 2 ? COL.thin : f & 12 ? COL.small : f & 16 ? COL.over : g.field[k2] < 0 ? COL.open : COL.solid;
         d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
       }
       cx.putImageData(im, 0, 0); maskImg[k] = c;
@@ -573,6 +573,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     row(`Webs under ${S.process.minWeb} mm`, g => g.stats.thin, g => g.stats.thin ? 'warn' : '');
     if (S.process.fillSmall) row(`Holes filled (under ${S.process.minHole} mm)`, g => g.stats.filled, g => g.stats.filled ? 'odd' : '');
     else row(`Holes under ${S.process.minHole} mm`, g => g.stats.small, g => g.stats.small ? 'odd' : '');
+    if (S.process.profile === 'FDM') row('Overhangs under 45°', g => g.stats.overhang, g => g.stats.overhang ? 'warn' : '');
     row('Triangles', g => (g.stats.estTris / 1e6).toFixed(2) + ' M');
     const n = $('#notes'); n.innerHTML = '';
     for (const x of notes) n.append(el('li', { class: x.bad ? 'bad' : x.ok ? 'ok' : 'warn' }, x.t));
@@ -855,7 +856,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         report.push(`${name}: ${c.F} triangles, ${c.ok ? 'watertight' : 'CHECK FAILED'} (open edges ${c.badEdges}, genus ${c.genus}, expected ${c.expectGenus} for ${part.holes} holes)`);
         files.push({ name, data: stlBinary(m, name) });
       }
-      for (const k of [0, 1]) { const s = G[k].stats; report.push(`${k ? 'Outer' : 'Inner'}: ${s.holes} holes, ${Math.round(s.open * 100)}% open, ${s.dropped} islands removed, ${s.thin} thin webs, ${s.small} undersized holes left, ${s.filled} filled`); }
+      for (const k of [0, 1]) { const s = G[k].stats; report.push(`${k ? 'Outer' : 'Inner'}: ${s.holes} holes, ${Math.round(s.open * 100)}% open, ${s.dropped} islands removed, ${s.thin} thin webs, ${s.small} undersized holes left, ${s.filled} filled` + (S.process.profile === 'FDM' ? `, ${s.overhang} overhangs under 45° ${s.ohBed === 'cap' ? 'with each half cap-down' : `with the ${s.ohBed} end on the bed`}` : '')); }
       for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
       const enc = new TextEncoder();
       files.push({ name: 'design.json', data: enc.encode(JSON.stringify(S, null, 2)) });
