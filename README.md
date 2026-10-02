@@ -52,11 +52,12 @@ Light reaches the room only where both shells are open along the ray from the LE
 - **Shells:** both, inner only or outer only.
 - **Caps:** attached to the walls, separate parts, or left out.
 - **3D print** gives one STL per shell, half or part, each checked edge-manifold with genus matching its hole count, plus `design.json`, `interface.json` for CAD, `profile.json` with the Fusion proxy script, and `checks.txt`.
-- **Laser cut** opens each cylinder wall into a flat rectangle at mid-thickness, with caps as discs that fit inside the tube ends. Each part comes as SVG and DXF R12 in millimetres: red holes cut first, blue outlines last.
+- **Laser cut** opens each cylinder wall into a flat rectangle at mid-thickness, with caps as cut discs or as STLs to print. Each flat part comes as SVG and DXF R12 in millimetres: red holes cut first, blue outlines last.
   - **Kerf:** holes are traced half a kerf inside, through the distance field, and outlines grown half a kerf, so parts cut to size.
   - **Seam backing strip:** an optional strip glued inside the seam carries the same holes, mapped to its smaller radius, so it blocks no light.
   - **Cap joint:**
     - *Tabs into slots* (default): the wall's capped ends carry tabs that push through arc slots in the cap, and the extra folds flat over the cap. Slots cut to sheet thickness plus clearance. The cap's flange reaches past the wall, so the wall pattern stops where rays clear it, keeping the preview exact.
+    - *Printed caps*: each cap comes as an STL with a groove on its inside face; the rolled wall's end pushes into it and the groove holds the tube round. The groove is sheet thickness plus clearance across (0.1 mm per side by default), 5 mm deep, with a lead-in chamfer at the mouth. The cap's plate is thickened away from the light along the rays (2.4 mm by default), so it blocks no more light than the thin disc in the preview. The wall pattern stops where rays clear the outer lip, and the cap pattern starts inside the inner lip. Print caps flat face down, with no supports.
     - *Press-fit inside*: plain discs that press into the tube ends.
   - **Sheet thickness** sets the wall thickness of both shells; the menu warns when the sheet is too thick to roll to the radius.
   - SVGs print at 1:1 for a card test.

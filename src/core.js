@@ -319,10 +319,20 @@ function buildShell(sh, pat, opts) {
   if (sepT) sWallHi = Math.min(sWallHi, zTop - t - Math.max(opts.minWeb, sh.rimTop / 2));
   if (sepB) sWallLo = Math.max(sWallLo, zBot + t + Math.max(opts.minWeb, sh.rimBot / 2));
   // Laser caps on tabs: the disc's flange reaches past the wall and would shade rays leaving the top and
-  // bottom of the wall pattern, so the pattern stops where those rays clear the flange.
+  // bottom of the wall pattern, so the pattern stops where those rays clear the flange. A printed cap's outer
+  // lip also hangs flangeDrop below the joint plane, so its lower edge sets the shadow line.
   if (opts.flange > 0) {
-    if (sepT) sWallHi = Math.min(sWallHi, (zTop - t) * Ro / (Ro + opts.flange));
-    if (sepB) sWallLo = Math.max(sWallLo, (zBot + t) * Ro / (Ro + opts.flange));
+    const drop = opts.flangeDrop || 0;
+    if (sepT) sWallHi = Math.min(sWallHi, (zTop - t - drop) * Ro / (Ro + opts.flange));
+    if (sepB) sWallLo = Math.max(sWallLo, (zBot + t + drop) * Ro / (Ro + opts.flange));
+  }
+  // A printed cap's inner lip stands lipIn inside the wall's bore, under the cap: the cap pattern starts far
+  // enough in that its rays clear the lip, with two grid rows of solid between so the cap can join there.
+  if (opts.lipIn > 0) {
+    const a = R - opts.lipIn;
+    if (sepT) sCapLo = Math.max(sCapLo, sC + rhoC - a * zTop / (zTop - t) + 2 * res);
+    if (sepB) sCapBHi = Math.min(sCapBHi, sCB - rhoCB + a * zBot / (zBot + t) - 2 * res);
+    if ((sepT && sHi - sCapLo < 6 * res) || (sepB && sCapBHi - sLo < 6 * res)) errors.push('The printed cap’s groove leaves no room for the cap pattern. Shrink the hub, the lip or the clearance.');
   }
   if (sWallHi - sWallLo < 6 * res) errors.push('Rims leave no room for the wall pattern. Reduce rim height or increase shell height.');
   if ((cap || capB) && sph && opts.fdm) warnings.push('A flat cap on a sphere needs supports on FDM. Print it on SLS, or use a cylinder.');
@@ -938,11 +948,12 @@ function flatParts(G, o) {
     }
     return holes;
   };
-  const parts = [], tabs = o.joint === 'tabs';
+  const parts = [], tabs = o.joint === 'tabs', printed = o.joint === 'print';
   const rect = (w, h) => ({ type: 'rect', x0: -k, y0: -k, x1: w + k, y1: h + k });
   // Press-fit caps sit inside a full-height tube. Tabbed caps sit on the tube ends, so the tube runs between
   // the two joint planes and carries tabs that push through slots in the caps; whatever comes through folds flat.
-  const zLo = zBot + (tabs && G.capB ? t : 0), zHi = zTop - (tabs && G.cap ? t : 0), Hb = zHi - zLo;
+  // Printed caps (printedCap) also sit on the ends: the tube runs between the joint planes, into their grooves.
+  const onEnds = tabs || printed, zLo = zBot + (onEnds && G.capB ? t : 0), zHi = zTop - (onEnds && G.cap ? t : 0), Hb = zHi - zLo;
   const nTab = Math.max(2, Math.round(o.tabs || 8)), tabW = Math.max(2, o.tabW || 10), tabH = t + Math.max(0, o.tabExtra == null ? 3 : o.tabExtra), fit = Math.max(0, o.fit == null ? 0.1 : o.fit), flange = Math.max(1, o.flange || 4);
   const tabPhi = i => (i + 0.5) * TAU / nTab; // half a spacing away from the seam
   let outline = rect(L, Hb);
@@ -955,14 +966,16 @@ function flatParts(G, o) {
     outline = { type: 'poly', points: growOrtho(P, k) };
   }
   parts.push({ name: 'wall', kind: 'sheet', w: L, h: Hb, outline, holes: sheet(Rm, zLo, L, Hb, 0), tabs: tabs ? { count: nTab, width: tabW, height: tabH, phi: Array.from({ length: nTab }, (_, i) => tabPhi(i)) } : null,
-    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${Hb.toFixed(2)} mm tall` + (tabs && (G.cap || G.capB) ? `, with ${nTab} tabs ${tabW} mm wide on each capped end: push them through the cap slots, then fold the ${(tabH - t).toFixed(1)} mm that comes through flat over the cap` : '') + ', seen from outside.' });
+    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${Hb.toFixed(2)} mm tall` + (tabs && (G.cap || G.capB) ? `, with ${nTab} tabs ${tabW} mm wide on each capped end: push them through the cap slots, then fold the ${(tabH - t).toFixed(1)} mm that comes through flat over the cap` : '') + (printed && (G.cap || G.capB) ? '; its capped ends push into the printed caps\' grooves' : '') + ', seen from outside.' });
   if (o.strip) {
-    const Rs = Rm - t, sLo = zBot + (G.capB ? t : 0), sHi = zTop - (G.cap ? t : 0), w = Math.max(2, o.stripW || 10);
+    // with printed caps the strip stops short of the grooves, where the caps' inner lips stand
+    const inGroove = printed ? Math.max(1, o.depth || 5) + 0.5 : 0;
+    const Rs = Rm - t, sLo = zBot + (G.capB ? t + inGroove : 0), sHi = zTop - (G.cap ? t + inGroove : 0), w = Math.max(2, o.stripW || 10);
     parts.push({ name: 'seam-strip', kind: 'sheet', w, h: sHi - sLo, outline: rect(w, sHi - sLo), holes: sheet(Rs, sLo, w, sHi - sLo, w / 2),
       note: `Glue inside the seam, centred on it, from ${sLo.toFixed(2)} to ${sHi.toFixed(2)} mm. Its holes line up with the wall's.` });
   }
   for (const [end, on, zc, bore, flipY] of [['top', G.cap, zTop - t / 2, G.boreT, 1], ['bottom', G.capB, zBot + t / 2, G.boreB, -1]]) {
-    if (!on) continue;
+    if (!on || printed) continue;
     const holes = loops.filter(P => zoneOf(P) === end).map(P => simplifyLoop(P.map(([phi, s]) => { const r = zc / tanPsi(s); return [r * Math.cos(phi), flipY * r * Math.sin(phi)]; }), tol));
     const circles = [];
     let rOut, note;
@@ -993,7 +1006,47 @@ function flatParts(G, o) {
   }
   return { parts, kerf, thickness: t, midRadius: Rm };
 }
-const fmt = v => (Math.round(v * 1000) / 1000).toString();
+// 3D-printed cap for a rolled sheet wall (cylinders with separate caps). It is the model's cap disc, thickened
+// away from the light along the rays to `plate`, so its holes block exactly what the thin disc blocks. Under it
+// two lips stand `depth` towards the light and leave a groove for the wall's end: sheet plus `fit` per side
+// across, with a lead-in chamfer at the mouth. buildShell must have run with flange = fit + lip,
+// flangeDrop = depth and lipIn = fit + lip, so no pattern ray touches a lip.
+// Returns a part for buildMesh (with the G to mesh it against) and the groove's dimensions.
+function printedCap(G, top, o) {
+  if (!(top ? G.sepT : G.sepB)) return { error: 'Printed caps need a capped cylinder with separate caps.' };
+  const { R, t, Ro, Nb, bandS, forced } = G;
+  const fit = Math.max(0, o.fit == null ? 0.1 : o.fit), w = Math.max(0.4, o.lip || 1.6), d = Math.max(1, o.depth || 5), plate = Math.max(t, o.plate || 2.4);
+  const sg = top ? 1 : -1, zc = top ? G.zTop - t : G.zBot + t, z1 = zc + sg * plate, zL = zc - sg * d, k = z1 / zc, ch = Math.min(0.6, w / 2, d / 3);
+  const a = R - fit - w, b = R - fit, g = Ro + fit, e = Ro + fit + w;
+  const sCap = top ? G.sCapLo : G.sCapBHi, bore = top ? G.boreT : G.boreB;
+  // the band row the plate grows from: solid, on the cap plane, inside the inner lip, and outside the pattern
+  let jP = -1;
+  const ok = j => forced[j] && Math.abs(G.pt(0, bandS[j])[1] - zc) < 1e-6 && G.pt(0, bandS[j])[0] < a - 1e-3;
+  if (top) { for (let j = 0; j < Nb; j++) if (bandS[j] > G.sC && bandS[j] < sCap && ok(j)) { jP = j; break; } }
+  else { for (let j = Nb - 1; j >= 0; j--) if (bandS[j] < G.sCB && bandS[j] > sCap && ok(j)) { jP = j; break; } }
+  if (jP < 0) return { error: 'The cap pattern reaches the groove; rebuild the shell with the printed-cap options.' };
+  const r0 = G.pt(0, bandS[jP])[0];
+  // Solid rim, from the outer lip's foot round the groove to row jP: the inside face (towards the light)
+  // and the outside face, resampled to matching rows. Only the faces are meshed in solid rows.
+  const F0 = [[g + ch, zL], [g, zL + sg * ch], [g, zc], [b, zc], [b, zL + sg * ch], [b - ch, zL], [a, zL], [a, zc], [r0, zc]];
+  const F1 = [[e, zL], [e, z1], [r0 * k, z1]];
+  const cum = P => { const c = [0]; for (let i = 1; i < P.length; i++) c.push(c[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1])); return c.map(v => v / c[c.length - 1]); };
+  const at = (P, c, u) => { let i = 1; while (i < P.length - 1 && c[i] < u) i++; const f = (u - c[i - 1]) / (c[i] - c[i - 1]); return [P[i - 1][0] + f * (P[i][0] - P[i - 1][0]), P[i - 1][1] + f * (P[i][1] - P[i - 1][1])]; };
+  const c0 = cum(F0), c1 = cum(F1), U = Array.from(new Set(c0.concat(c1).map(u => +u.toFixed(9)))).sort((x, y) => x - y).slice(0, -1);
+  const rim = U.map(u => { const p = at(F0, c0, u), q = at(F1, c1, u); return { band: -1, ri: p[0], zi: p[1], ro: q[0], zo: q[1] }; });
+  // patterned rows, thickened along their rays; the bore blend keeps its shape, scaled to the new thickness
+  const thick = r => r.band >= 0 ? Object.assign({}, r, { ro: r.ri * k, zo: z1 }) : Object.assign({}, r, { ro: r.ri + (r.ro - r.ri) * plate / t, zo: z1 });
+  const s0 = G.bandRowStart;
+  const rows = top ? rim.concat(G.rows.slice(s0 + jP).map(thick)) : G.rows.slice(0, s0 + jP + 1).map(thick).concat(rim.reverse());
+  const holes = G.parts.find(p => p.suffix === (top ? 'top-cap' : 'bottom-cap')).holes;
+  const pt =(fc, s) => { const p = G.pt(0, s); return fc ? [p[0] * k, z1] : p; };
+  return {
+    G: Object.assign({}, G, { pt }),
+    part: { suffix: top ? 'top-cap' : 'bottom-cap', rows, j0: 0, j1: rows.length - 1, holes, ends: bore ? 2 : 1, fanTop: top && !bore, fanBottom: !top && !bore },
+    groove: { inner: b, outer: g, width: g - b, depth: d, lipInner: a, lipOuter: e, plate, zJoint: zc, zFace: z1, zLip: zL, chamfer: ch },
+  };
+}
+const fmt =v => (Math.round(v * 1000) / 1000).toString();
 // Grow a counter-clockwise rectilinear polygon outwards by d (every corner is a right angle).
 function growOrtho(P, d) {
   if (!d) return P;
@@ -1030,4 +1083,4 @@ function dxfOf(p) {
   return o.join('\n') + '\n';
 }
 
-if (typeof module !== 'undefined') module.exports = { fieldContours, flatParts, svgOf, dxfOf, polyArea, clipRect, simplifyLoop, shellProfile, profileVolume, profileClosed, twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };
+if (typeof module !== 'undefined') module.exports = { fieldContours, flatParts, printedCap,svgOf, dxfOf, polyArea, clipRect, simplifyLoop, shellProfile, profileVolume, profileClosed, twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };

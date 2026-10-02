@@ -25,7 +25,7 @@ function tableUplightState() {
     process: { profile: 'FDM', minWeb: 2, minHole: 3, clearance: 0.4, split: true, seam: 4, fillSmall: true, capsSeparate: false },
     room: { W: 4200, D: 3600, H: 2600, lampZ: 900, exposure: 1, ambient: 0.02 },
     res: 0.7,
-    export: { format: 'stl', omitCaps: false, shells: 'both', kerf: 0.15, strip: true, stripW: 10, joint: 'tabs', tabs: 8, tabW: 10, tabExtra: 3, flange: 4, fit: 0.1 },
+    export: { format: 'stl', omitCaps: false, shells: 'both', kerf: 0.15, strip: true, stripW: 10, joint: 'tabs', tabs: 8, tabW: 10, tabExtra: 3, flange: 4, fit: 0.1, depth: 5, lip: 1.6, plate: 2.4 },
   };
   fitOuter(s);
   return s;

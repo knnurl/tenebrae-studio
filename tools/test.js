@@ -3,7 +3,7 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const root = path.join(__dirname, '..'), strip = f => fs.readFileSync(path.join(root, 'src', f), 'utf8').replace(/\nif \(typeof module[\s\S]*$/, '\n');
 const bundlePath = path.join(os.tmpdir(), 'tenebrae-bundle.js');
-fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={fieldContours,flatParts,svgOf,dxfOf,polyArea,shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
+fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={fieldContours,flatParts,printedCap,svgOf,dxfOf,polyArea,shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
 const X = require(bundlePath);
 let fails = 0;
 const check = (name, cond, info='') => { console.log((cond?'PASS ':'FAIL ')+name+(info?'  '+info:'')); if(!cond) fails++; };
@@ -344,6 +344,45 @@ for (const pr of X.PRESETS) {
     const svg = X.svgOf(wk, { title: 'w', desc: '' }), dxf = X.dxfOf(wk);
     check(`tabs ${who}: SVG and DXF both carry the tabbed outline`, (svg.split('id="cut-outline"')[1].match(/<path /g) || []).length === 1 && (dxf.match(/\nPOLYLINE\n/g) || []).length === wk.holes.length + 1);
   }
+}
+// Printed caps for laser-cut walls: watertight, the groove fits the sheet, holes stay on their rays, lips shade nothing
+{
+  const d = X.defaultState(); d.shells.forEach(s => { s.t = 0.8; }); X.fitOuter(d);
+  const pa = X.effectivePatterns(d), ca = X.effectiveCaps(d), cb = X.effectiveCapsBot(d), co = { fit: 0.1, lip: 1.6, depth: 5, plate: 2.4 }, reach = co.fit + co.lip;
+  const o = (k, extra) => Object.assign({res:d.res,fillSmall:true,minWeb:1.2,minHole:1,split:false,seam:4,mirror:k===1&&d.link.mirror,capPattern:ca[k],capFollow:X.capFollows(d,k),capBotPattern:cb[k],capBotFollow:X.capFollowsBot(d,k),capsSeparate:true,flange:reach,flangeDrop:co.depth,lipIn:reach}, extra || {});
+  for (const k of [0, 1]) {
+    const G = X.buildShell(d.shells[k], pa[k], o(k)), who = k ? 'outer' : 'inner', t = G.t, Ro = G.Ro;
+    if (!G.ok) { check(`printed ${who}: shell builds`, false, G.errors.join('; ')); continue; }
+    for (const top of [true, false]) {
+      const end = `${who} ${top ? 'top' : 'bottom'}`, P = X.printedCap(G, top, co), q = P.groove;
+      const m = X.buildMesh(P.G, P.part), c = X.checkMesh(m, P.part.holes, P.part.ends);
+      check(`printed ${end}: cap is watertight with every hole`, c.ok && P.part.holes > 0, `holes=${P.part.holes} genus=${c.genus} exp=${c.expectGenus} bad=${c.badEdges} F=${c.F}`);
+      check(`printed ${end}: groove is sheet + 2 x 0.1 mm wide, 5 mm deep, centred on the wall`, Math.abs(q.width - (t + 0.2)) < 1e-9 && Math.abs(Math.abs(q.zLip - q.zJoint) - 5) < 1e-9 && Math.abs((q.inner + q.outer) / 2 - (G.R + t / 2)) < 1e-9, `${q.width.toFixed(3)} x ${Math.abs(q.zLip - q.zJoint)} mm`);
+      let zmin = Infinity, zmax = -Infinity, rmax = 0; const p = m.positions;
+      for (let i = 0; i < p.length; i += 3) { zmin = Math.min(zmin, p[i + 2]); zmax = Math.max(zmax, p[i + 2]); rmax = Math.max(rmax, Math.hypot(p[i], p[i + 1])); }
+      const want = top ? [G.zTop - t - 5, G.zTop - t + 2.4] : [G.zBot + t - 2.4, G.zBot + t + 5];
+      check(`printed ${end}: spans lip foot to plate face, ${(2 * q.lipOuter).toFixed(1)} mm across`, Math.abs(zmin - want[0]) < 1e-4 && Math.abs(zmax - want[1]) < 1e-4 && Math.abs(rmax - (Ro + reach)) < 1e-4, `z ${zmin.toFixed(3)}..${zmax.toFixed(3)}, r ${rmax.toFixed(3)}`);
+      let ray = 0; for (const r of P.part.rows) if (r.band >= 0) ray = Math.max(ray, Math.abs(Math.atan2(r.zi, r.ri) - Math.atan2(r.zo, r.ro)));
+      check(`printed ${end}: thickened holes stay on their rays from the light`, ray < 1e-12, `max ${ray.toExponential(1)} rad`);
+    }
+    // a ray through the end of the wall pattern passes the outer lip's foot; one through the cap pattern's edge passes inside the inner lip
+    const e = Ro + reach, a = G.R - reach;
+    const wallT = G.sWallHi * e / Ro <= G.zTop - t - 5 + 1e-9, wallB = G.sWallLo * e / Ro >= G.zBot + t + 5 - 1e-9;
+    const capT = G.pt(0, G.sCapLo)[0] <= a + 1e-9, capB = G.pt(0, G.sCapBHi)[0] <= a + 1e-9;
+    check(`printed ${who}: no wall or cap pattern ray touches a lip`, wallT && wallB && capT && capB, `wall top ray at the lip ${(G.sWallHi * e / Ro).toFixed(2)} <= ${(G.zTop - t - 5).toFixed(2)}, cap edge r ${G.pt(0, G.sCapLo)[0].toFixed(2)} <= ${a.toFixed(2)}`);
+    const F = X.flatParts(G, { kerf: 0, strip: true, stripW: 10, joint: 'print', depth: 5 }), wall = F.parts.find(p => p.name === 'wall'), strip = F.parts.find(p => p.name === 'seam-strip');
+    check(`printed ${who}: wall is a plain rectangle between the joint planes, no cap discs`, wall.outline.type === 'rect' && Math.abs(wall.h - (G.zTop - G.zBot - 2 * t)) < 1e-9 && !F.parts.some(p => p.kind === 'disc'));
+    check(`printed ${who}: seam strip stops clear of both grooves`, Math.abs(strip.h - (wall.h - 2 * 5.5)) < 1e-9, `${strip.h.toFixed(2)} of ${wall.h.toFixed(2)} mm`);
+  }
+  // Volume: an unpierced cap matches its revolved cross-section
+  const sh = d.shells[0], pat = { gen: 'slots', invert: false, phase: 0, params: { N: 3, twist: 0, wobA: 0, wobK: 0, duty: 0.0001 } };
+  const G = X.buildShell(sh, pat, o(0, { capPattern: null, capBotPattern: null, capFollow: false, capBotFollow: false }));
+  const P = X.printedCap(G, true, co), q = P.groove, m = X.buildMesh(P.G, P.part), pp = m.positions, ix = m.indices;
+  let vol = 0; for (let i = 0; i < ix.length; i += 3) { const A = ix[i] * 3, B = ix[i + 1] * 3, C = ix[i + 2] * 3; vol += (pp[A] * (pp[B + 1] * pp[C + 2] - pp[B + 2] * pp[C + 1]) - pp[A + 1] * (pp[B] * pp[C + 2] - pp[B + 2] * pp[C]) + pp[A + 2] * (pp[B] * pp[C + 1] - pp[B + 1] * pp[C])) / 6; }
+  const zc = q.zJoint, zL = q.zLip, z1 = q.zFace, h = q.chamfer, b0 = G.boreT;
+  const poly = [[q.outer + h, zL], [q.lipOuter, zL], [q.lipOuter, z1], [b0, z1], [b0, zc], [q.lipInner, zc], [q.lipInner, zL], [q.inner - h, zL], [q.inner, zL + h], [q.inner, zc], [q.outer, zc], [q.outer, zL + h]];
+  const segs = poly.map((a, i) => ({ type: 'line', a, b: poly[(i + 1) % poly.length] })), exact = X.profileVolume(segs);
+  check('printed: unpierced cap volume matches its cross-section', G.stats.holes === 0 && vol > 0 && Math.abs(vol - exact) / exact < 0.002, `vol=${vol.toFixed(1)} exact=${exact.toFixed(1)}`);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 process.exit(fails ? 1 : 0);

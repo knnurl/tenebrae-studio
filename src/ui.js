@@ -458,9 +458,13 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   // ends, because it could not otherwise close around the inner shell.
   const capsApart = st => st.process.capsSeparate || (st.export && st.export.format === 'laser');
   const tabbedCaps = st => !!(st.export && st.export.format === 'laser' && st.export.joint === 'tabs');
+  const printedCaps = st => !!(st.export && st.export.format === 'laser' && st.export.joint === 'print');
+  // how far a cap's joint reaches past the wall (flange) and hangs below its joint plane (drop), and how far its inner lip stands inside the wall
+  const capReach = st => tabbedCaps(st) ? { flange: st.export.flange, flangeDrop: 0, lipIn: 0 }
+    : printedCaps(st) ? { flange: st.export.fit + st.export.lip, flangeDrop: st.export.depth, lipIn: st.export.fit + st.export.lip } : { flange: 0, flangeDrop: 0, lipIn: 0 };
   const sepCaps = (st, k) => capsApart(st) && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
   const needsSplit = (st, k) => (st.shells[k].shape === 'sphere' && st.process.split) || (k === 1 && st.shells[1].cap.on && st.shells[1].capBot.on && !sepCaps(st, 1));
-  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), flange: tabbedCaps(st) ? st.export.flange : 0, fdm: st.process.profile === 'FDM' }; }
+  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), ...capReach(st), fdm: st.process.profile === 'FDM' }; }
   function opts(k, res, caps, capsB) { return optsFor(S, k, res, caps, capsB); }
   function build(draft) {
     const res = draft ? Math.min(2.5, S.res * 2) : S.res;
@@ -492,6 +496,19 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     if (tabbedCaps(S) && (inner.cap.on || inner.capBot.on)) {
       const gap = outer.R - (inner.R + inner.t), need = S.export.flange + S.process.clearance;
       if (gap < need) notes.push({ bad: true, block: true, t: `The inner caps' ${S.export.flange} mm flange doesn't fit the ${num(gap, 0.1)} mm gap between the shells. Shrink the flange or widen the gap.` });
+    }
+    if (printedCaps(S)) { // printed caps grow past the model: lips around each wall end, plates thickened outwards
+      const box = [0, 1].map(k => {
+        const sh = S.shells[k], E = S.export, a = sh.R - E.fit - E.lip, e = sh.R + sh.t + E.fit + E.lip, P = Math.max(sh.t, E.plate), out = [];
+        if (sh.cap.on) { const zc = sh.zTop - sh.t; out.push([0, e, zc, zc + P], [a, e, zc - E.depth, zc]); }
+        if (sh.capBot.on) { const zc = sh.zBot + sh.t; out.push([0, e, zc - P, zc], [a, e, zc, zc + E.depth]); }
+        return { caps: out, wall: [sh.R, sh.R + sh.t, sh.zBot + (sh.capBot.on ? sh.t : 0), sh.zTop - (sh.cap.on ? sh.t : 0)] };
+      });
+      const dist = (A, B) => Math.hypot(Math.max(0, A[0] - B[1], B[0] - A[1]), Math.max(0, A[2] - B[3], B[2] - A[3]));
+      let gap = Infinity;
+      for (const A of box[0].caps) for (const B of box[1].caps.concat([box[1].wall])) gap = Math.min(gap, dist(A, B));
+      for (const B of box[1].caps) gap = Math.min(gap, dist(box[0].wall, B));
+      if (gap < S.process.clearance) notes.push({ bad: true, block: true, t: `The printed caps come within ${num(gap, 0.1)} mm of the other shell; the process needs ${S.process.clearance} mm. Widen the gap between the shells, or use thinner lips, plates or a shallower groove.` });
     }
     if (tabbedCaps(S) && S.export.strip) {
       const Rm = inner.R + inner.t / 2, space = Math.PI * Rm / S.export.tabs;
@@ -712,13 +729,20 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       num2('Kerf (mm)', () => EX().kerf, v => { EX().kerf = v; exportChanged(false); }, 0, 0.6, 0.01);
       m.append(box);
       if (anyCaps()) {
-        seg('Cap joint', [['tabs', 'Tabs into slots'], ['inside', 'Press-fit inside']], EX().joint, v => { EX().joint = v; exportChanged(true); });
+        seg('Cap joint', [['tabs', 'Tabs into slots'], ['print', 'Printed caps'], ['inside', 'Press-fit inside']], EX().joint, v => { EX().joint = v; exportChanged(true); });
+        const tb = el('div', { class: 'nums' }), add = (label, key, min, max, step, geom) => {
+          const id = 'x' + (uid++), inp = el('input', { type: 'number', id, min, max, step, value: EX()[key] });
+          inp.addEventListener('change', () => { const v = Math.min(max, Math.max(min, +inp.value)); if (isFinite(v)) { EX()[key] = v; exportChanged(geom); } });
+          tb.append(el('label', { for: id }, label), inp);
+        };
+        if (EX().joint === 'print') {
+          add('Groove depth (mm)', 'depth', 2, 15, 0.5, true);
+          add('Lip thickness (mm)', 'lip', 0.8, 4, 0.1, true);
+          add('Plate thickness (mm)', 'plate', 1, 6, 0.1, true);
+          add('Groove clearance per side (mm)', 'fit', 0, 0.5, 0.05, true);
+          m.append(tb);
+        }
         if (EX().joint === 'tabs') {
-          const tb = el('div', { class: 'nums' }), add = (label, key, min, max, step, geom) => {
-            const id = 'x' + (uid++), inp = el('input', { type: 'number', id, min, max, step, value: EX()[key] });
-            inp.addEventListener('change', () => { const v = Math.min(max, Math.max(min, +inp.value)); if (isFinite(v)) { EX()[key] = v; exportChanged(geom); } });
-            tb.append(el('label', { for: id }, label), inp);
-          };
           add('Tabs per end', 'tabs', 3, 24, 1, false);
           add('Tab width (mm)', 'tabW', 3, 30, 0.5, false);
           add('Tab extra to fold over (mm)', 'tabExtra', 0, 10, 0.5, false);
@@ -738,6 +762,8 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       if (strain > 0.015) m.append(el('p', { class: 'why' }, `A ${S.shells[0].t} mm sheet bends ${(strain * 100).toFixed(1)}% to roll at this radius; most sheet cracks or springs back above about 1.5%. Lampshade polypropylene or black card at 0.5–1 mm rolls cleanly.`));
       note(m, (EX().joint === 'tabs' && anyCaps()
         ? 'Walls open into rectangles at mid-thickness with tabs on their capped ends; caps get matching slots and a flange, and the wall pattern stops clear of the flange’s shadow. Push the tabs through and fold the extra flat.'
+        : EX().joint === 'print' && anyCaps()
+        ? 'Walls open into rectangles at mid-thickness; caps come as STLs to print, each with a groove the wall’s end pushes into. Cap holes run along the rays, so the thicker plate blocks no more light, and the wall pattern stops clear of the lips.'
         : 'Walls open into rectangles at mid-thickness and caps become discs that press into the tube ends.') + ' Kerf is compensated, and the backing strip carries matching holes so the seam stays invisible. SVGs print at 1:1 for a card test.');
     } else {
       note(m, capsMode() === 'attached' ? 'Each shell is one watertight part, split into halves where it has to be. CAD profiles and the Fusion proxy script come with it.'
@@ -765,11 +791,11 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   async function exportLaser(btn) {
     const files = [], report = [`Tenebrae cut files, ${new Date().toISOString()}`, `Sheet ${S.shells[0].t} mm, kerf ${EX().kerf} mm, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`,
       'Red = holes (cut first), blue = outlines (cut last). Everything is drawn as seen from outside the lamp.', ''];
-    let total = 0;
+    let total = 0, meshOK = true;
     for (const k of shellSet()) {
       const g = G[k], who = k ? 'outer' : 'inner';
       btn.textContent = `Tracing ${who} shell…`; await new Promise(r => setTimeout(r, 0));
-      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW, joint: EX().joint, tabs: EX().tabs, tabW: EX().tabW, tabExtra: EX().tabExtra, flange: EX().flange, fit: EX().fit });
+      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW, joint: EX().joint, tabs: EX().tabs, tabW: EX().tabW, tabExtra: EX().tabExtra, flange: EX().flange, fit: EX().fit, depth: EX().depth });
       if (F.error) { report.push(`${who}: ${F.error}`); continue; }
       for (const p of F.parts) {
         if (EX().omitCaps && p.kind === 'disc') continue;
@@ -779,12 +805,26 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         total += p.cutLength;
         report.push(`${name}: ${p.w.toFixed(1)} x ${p.h.toFixed(1)} mm, ${p.holes.length} cut-outs, ${(p.cutLength / 1000).toFixed(2)} m of cut. ${p.note}`);
       }
+      if (!printedCaps(S) || EX().omitCaps) continue;
+      for (const top of [true, false]) {
+        if (!(top ? g.sepT : g.sepB)) continue;
+        const name = `${who}-${top ? 'top' : 'bottom'}-cap.stl`;
+        btn.textContent = `Meshing ${name}…`; await new Promise(r => setTimeout(r, 0));
+        const P = printedCap(g, top, { fit: EX().fit, lip: EX().lip, depth: EX().depth, plate: EX().plate });
+        if (P.error) { report.push(`${name}: ${P.error}`); meshOK = false; continue; }
+        const m = buildMesh(P.G, P.part), c = checkMesh(m, P.part.holes, P.part.ends), q = P.groove;
+        meshOK = meshOK && c.ok;
+        files.push({ name, data: stlBinary(m, name) });
+        report.push(`${name}: ${c.F} triangles, ${c.ok ? 'watertight' : 'CHECK FAILED'} (open edges ${c.badEdges}, genus ${c.genus}, expected ${c.expectGenus}). ${(2 * q.lipOuter).toFixed(2)} mm across, ${q.plate} mm plate; groove ${q.width.toFixed(2)} mm wide and ${q.depth} mm deep, from ${(2 * q.inner).toFixed(2)} to ${(2 * q.outer).toFixed(2)} mm diameter.`);
+      }
     }
     report.push('', `Total cut length ${(total / 1000).toFixed(2)} m.`, tabbedCaps(S)
       ? 'Assembly: roll each wall with the drawn face outwards and glue the backing strip inside the seam. Push the wall tabs through the cap slots and fold the extra flat over each cap.'
+      : printedCaps(S)
+      ? 'Assembly: print each cap with its flat face on the bed and the groove facing up; it needs no supports. Roll each wall with the drawn face outwards, glue the backing strip inside the seam, and push the wall ends into the cap grooves; the lead-in chamfer guides the edge. A thin bead of glue in the groove makes the joint permanent. Print a short test ring first to check the fit.'
       : 'Assembly: roll each wall with the drawn face outwards, glue the backing strip inside the seam, then press the cap discs into the tube ends.');
     for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
-    return { files, report, zipName: `tenebrae-cut-${new Date().toISOString().slice(0, 10)}.zip`, label: 'cut files', ok: true };
+    return { files, report, zipName: `tenebrae-cut-${new Date().toISOString().slice(0, 10)}.zip`, label: 'cut files', ok: meshOK };
   }
 
   async function exportPack() {
@@ -799,6 +839,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         L.files.push({ name: 'interface.json', data: enc0.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
         L.files.push({ name: 'checks.txt', data: enc0.encode(L.report.join('\n') + '\n') });
         btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
+        if (!L.ok) toast('A printed cap failed its mesh check; see checks.txt in the zip.', true);
         await save(L.zipName, new Blob(zipStore(L.files), { type: 'application/zip' }), L.label);
         return;
       }
