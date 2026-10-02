@@ -457,9 +457,10 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   // Split at the light's plane: spheres when the process asks for it, and any outer shell capped at both
   // ends, because it could not otherwise close around the inner shell.
   const capsApart = st => st.process.capsSeparate || (st.export && st.export.format === 'laser');
+  const tabbedCaps = st => !!(st.export && st.export.format === 'laser' && st.export.joint === 'tabs');
   const sepCaps = (st, k) => capsApart(st) && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
   const needsSplit = (st, k) => (st.shells[k].shape === 'sphere' && st.process.split) || (k === 1 && st.shells[1].cap.on && st.shells[1].capBot.on && !sepCaps(st, 1));
-  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), fdm: st.process.profile === 'FDM' }; }
+  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), flange: tabbedCaps(st) ? st.export.flange : 0, fdm: st.process.profile === 'FDM' }; }
   function opts(k, res, caps, capsB) { return optsFor(S, k, res, caps, capsB); }
   function build(draft) {
     const res = draft ? Math.min(2.5, S.res * 2) : S.res;
@@ -488,6 +489,14 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     else if (stemEnd(inner).on && stemEnd(inner).bore < 5.5) notes.push({ bad: false, t: `The inner ${endName} bore (${num(2 * stemEnd(inner).bore, 0.5)} mm across) is too small to pass a 10 mm LED board; the LED would have to be fitted after the stem.` });
     if (stemEnd(outer).on && !stemEnd(outer).bore) notes.push({ bad: true, t: `The stem can't pass the outer shell: its ${endName} cap has no bore.` });
     if (outer.cap.on && outer.capBot.on && !sepCaps(S, 1)) notes.push({ bad: false, t: 'The outer shell is capped at both ends, so it exports as two halves split at the light’s plane that close around the inner shell. Exporting caps as separate parts avoids the split and its seam line.' });
+    if (tabbedCaps(S) && (inner.cap.on || inner.capBot.on)) {
+      const gap = outer.R - (inner.R + inner.t), need = S.export.flange + S.process.clearance;
+      if (gap < need) notes.push({ bad: true, block: true, t: `The inner caps' ${S.export.flange} mm flange doesn't fit the ${num(gap, 0.1)} mm gap between the shells. Shrink the flange or widen the gap.` });
+    }
+    if (tabbedCaps(S) && S.export.strip) {
+      const Rm = inner.R + inner.t / 2, space = Math.PI * Rm / S.export.tabs;
+      if (S.export.tabW / 2 + S.export.stripW / 2 > space) notes.push({ bad: false, t: 'The seam backing strip overlaps the nearest tabs. Use fewer or narrower tabs, or a narrower strip.' });
+    }
     if (sepCaps(S, 0) || sepCaps(S, 1)) notes.push({ bad: false, t: 'Caps export as separate discs. Assemble the tubes around the light first, then fit the caps onto the tube ends.' });
     if (S.process.profile === 'FDM' && S.shells.some(sh => (sh.cap.on || sh.capBot.on) && sh.shape === 'cylinder') && !S.process.capsSeparate) notes.push({ bad: false, t: 'Print capped cylinders cap-down: the flat cap needs no support.' });
   }
@@ -550,8 +559,8 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     row('Triangles', g => (g.stats.estTris / 1e6).toFixed(2) + ' M');
     const n = $('#notes'); n.innerHTML = '';
     for (const x of notes) n.append(el('li', { class: x.bad ? 'bad' : x.ok ? 'ok' : 'warn' }, x.t));
-    const blocked = !(G[0] && G[0].ok && G[1] && G[1].ok) || notes.some(x => x.bad && /overlap/.test(x.t));
-    UI.blocked = blocked ? (notes.find(x => x.bad) || {}).t || 'Fix the blocked shell first.' : '';
+    const blocked = !(G[0] && G[0].ok && G[1] && G[1].ok) || notes.some(x => x.block || (x.bad && /overlap/.test(x.t)));
+    UI.blocked = blocked ? (notes.find(x => x.block) || notes.find(x => x.bad) || {}).t || 'Fix the blocked shell first.' : '';
     if (!$('#exportMenu').hidden) renderExportMenu();
   }
 
@@ -701,15 +710,35 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       };
       num2('Sheet thickness (mm)', () => S.shells[0].t, v => { S.shells.forEach(sh => { sh.t = v; }); exportChanged(true); }, 0.2, 6, 0.05);
       num2('Kerf (mm)', () => EX().kerf, v => { EX().kerf = v; exportChanged(false); }, 0, 0.6, 0.01);
+      m.append(box);
+      if (anyCaps()) {
+        seg('Cap joint', [['tabs', 'Tabs into slots'], ['inside', 'Press-fit inside']], EX().joint, v => { EX().joint = v; exportChanged(true); });
+        if (EX().joint === 'tabs') {
+          const tb = el('div', { class: 'nums' }), add = (label, key, min, max, step, geom) => {
+            const id = 'x' + (uid++), inp = el('input', { type: 'number', id, min, max, step, value: EX()[key] });
+            inp.addEventListener('change', () => { const v = Math.min(max, Math.max(min, +inp.value)); if (isFinite(v)) { EX()[key] = v; exportChanged(geom); } });
+            tb.append(el('label', { for: id }, label), inp);
+          };
+          add('Tabs per end', 'tabs', 3, 24, 1, false);
+          add('Tab width (mm)', 'tabW', 3, 30, 0.5, false);
+          add('Tab extra to fold over (mm)', 'tabExtra', 0, 10, 0.5, false);
+          add('Flange past the wall (mm)', 'flange', 2, 15, 0.5, true);
+          add('Slot clearance per side (mm)', 'fit', 0, 0.5, 0.05, false);
+          m.append(tb);
+        }
+      }
+      const box2 = el('div', { class: 'nums' });
       const id = 'x' + (uid++), cb = el('input', { type: 'checkbox', id, checked: EX().strip ? '' : false });
       cb.addEventListener('change', () => { EX().strip = cb.checked; exportChanged(false); });
-      box.append(el('div', { class: 'ctl chk' }, cb, el('label', { for: id }, 'Seam backing strip')));
-      if (EX().strip) num2('Strip width (mm)', () => EX().stripW, v => { EX().stripW = v; exportChanged(false); }, 4, 40, 1);
-      m.append(box);
+      box2.append(el('div', { class: 'ctl chk' }, cb, el('label', { for: id }, 'Seam backing strip')));
+      if (EX().strip) { const i2 = 'x' + (uid++), inp = el('input', { type: 'number', id: i2, min: 4, max: 40, step: 1, value: EX().stripW }); inp.addEventListener('change', () => { const v = Math.min(40, Math.max(4, +inp.value)); if (isFinite(v)) { EX().stripW = v; exportChanged(false); } }); box2.append(el('label', { for: i2 }, 'Strip width (mm)'), inp); }
+      m.append(box2);
       // Rolling a sheet into the tube bends it to a surface strain of about t / 2R.
       const strain = Math.max(...shellSet().map(k => S.shells[k].t / (2 * S.shells[k].R)));
       if (strain > 0.015) m.append(el('p', { class: 'why' }, `A ${S.shells[0].t} mm sheet bends ${(strain * 100).toFixed(1)}% to roll at this radius; most sheet cracks or springs back above about 1.5%. Lampshade polypropylene or black card at 0.5–1 mm rolls cleanly.`));
-      note(m, 'Walls open into rectangles at mid-thickness and caps become discs that fit inside the tube ends. Kerf is compensated, and the backing strip carries matching holes so the seam stays invisible. SVGs print at 1:1 for a card test.');
+      note(m, (EX().joint === 'tabs' && anyCaps()
+        ? 'Walls open into rectangles at mid-thickness with tabs on their capped ends; caps get matching slots and a flange, and the wall pattern stops clear of the flange’s shadow. Push the tabs through and fold the extra flat.'
+        : 'Walls open into rectangles at mid-thickness and caps become discs that press into the tube ends.') + ' Kerf is compensated, and the backing strip carries matching holes so the seam stays invisible. SVGs print at 1:1 for a card test.');
     } else {
       note(m, capsMode() === 'attached' ? 'Each shell is one watertight part, split into halves where it has to be. CAD profiles and the Fusion proxy script come with it.'
         : capsMode() === 'separate' ? 'Caps become flat discs that sit on the wall tube ends; tubes print upright and discs print flat. CAD profiles and the Fusion script come with it.'
@@ -740,7 +769,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     for (const k of shellSet()) {
       const g = G[k], who = k ? 'outer' : 'inner';
       btn.textContent = `Tracing ${who} shell…`; await new Promise(r => setTimeout(r, 0));
-      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW });
+      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW, joint: EX().joint, tabs: EX().tabs, tabW: EX().tabW, tabExtra: EX().tabExtra, flange: EX().flange, fit: EX().fit });
       if (F.error) { report.push(`${who}: ${F.error}`); continue; }
       for (const p of F.parts) {
         if (EX().omitCaps && p.kind === 'disc') continue;
@@ -751,7 +780,9 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         report.push(`${name}: ${p.w.toFixed(1)} x ${p.h.toFixed(1)} mm, ${p.holes.length} cut-outs, ${(p.cutLength / 1000).toFixed(2)} m of cut. ${p.note}`);
       }
     }
-    report.push('', `Total cut length ${(total / 1000).toFixed(2)} m.`, 'Assembly: roll each wall with the drawn face outwards, glue the backing strip inside the seam, then press the cap discs into the tube ends.');
+    report.push('', `Total cut length ${(total / 1000).toFixed(2)} m.`, tabbedCaps(S)
+      ? 'Assembly: roll each wall with the drawn face outwards and glue the backing strip inside the seam. Push the wall tabs through the cap slots and fold the extra flat over each cap.'
+      : 'Assembly: roll each wall with the drawn face outwards, glue the backing strip inside the seam, then press the cap discs into the tube ends.');
     for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
     return { files, report, zipName: `tenebrae-cut-${new Date().toISOString().slice(0, 10)}.zip`, label: 'cut files', ok: true };
   }

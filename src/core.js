@@ -318,6 +318,12 @@ function buildShell(sh, pat, opts) {
   const sepT = !!(opts.capsSeparate && !sph && cap), sepB = !!(opts.capsSeparate && !sph && capB);
   if (sepT) sWallHi = Math.min(sWallHi, zTop - t - Math.max(opts.minWeb, sh.rimTop / 2));
   if (sepB) sWallLo = Math.max(sWallLo, zBot + t + Math.max(opts.minWeb, sh.rimBot / 2));
+  // Laser caps on tabs: the disc's flange reaches past the wall and would shade rays leaving the top and
+  // bottom of the wall pattern, so the pattern stops where those rays clear the flange.
+  if (opts.flange > 0) {
+    if (sepT) sWallHi = Math.min(sWallHi, (zTop - t) * Ro / (Ro + opts.flange));
+    if (sepB) sWallLo = Math.max(sWallLo, (zBot + t) * Ro / (Ro + opts.flange));
+  }
   if (sWallHi - sWallLo < 6 * res) errors.push('Rims leave no room for the wall pattern. Reduce rim height or increase shell height.');
   if ((cap || capB) && sph && opts.fdm) warnings.push('A flat cap on a sphere needs supports on FDM. Print it on SLS, or use a cylinder.');
   if (sh.rimBot < opts.minWeb || sh.rimTop < opts.minWeb) warnings.push(`A rim is narrower than the ${opts.minWeb} mm minimum web.`);
@@ -932,33 +938,70 @@ function flatParts(G, o) {
     }
     return holes;
   };
-  const parts = [];
+  const parts = [], tabs = o.joint === 'tabs';
   const rect = (w, h) => ({ type: 'rect', x0: -k, y0: -k, x1: w + k, y1: h + k });
-  parts.push({ name: 'wall', kind: 'sheet', w: L, h: H, outline: rect(L, H), holes: sheet(Rm, zBot, L, H, 0),
-    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${H.toFixed(2)} mm tall, seen from outside.` });
+  // Press-fit caps sit inside a full-height tube. Tabbed caps sit on the tube ends, so the tube runs between
+  // the two joint planes and carries tabs that push through slots in the caps; whatever comes through folds flat.
+  const zLo = zBot + (tabs && G.capB ? t : 0), zHi = zTop - (tabs && G.cap ? t : 0), Hb = zHi - zLo;
+  const nTab = Math.max(2, Math.round(o.tabs || 8)), tabW = Math.max(2, o.tabW || 10), tabH = t + Math.max(0, o.tabExtra == null ? 3 : o.tabExtra), fit = Math.max(0, o.fit == null ? 0.1 : o.fit), flange = Math.max(1, o.flange || 4);
+  const tabPhi = i => (i + 0.5) * TAU / nTab; // half a spacing away from the seam
+  let outline = rect(L, Hb);
+  if (tabs && (G.cap || G.capB)) {
+    const P = [[0, 0]];
+    if (G.capB) for (let i = 0; i < nTab; i++) { const x = Rm * tabPhi(i); P.push([x - tabW / 2, 0], [x - tabW / 2, -tabH], [x + tabW / 2, -tabH], [x + tabW / 2, 0]); }
+    P.push([L, 0], [L, Hb]);
+    if (G.cap) for (let i = nTab - 1; i >= 0; i--) { const x = Rm * tabPhi(i); P.push([x + tabW / 2, Hb], [x + tabW / 2, Hb + tabH], [x - tabW / 2, Hb + tabH], [x - tabW / 2, Hb]); }
+    P.push([0, Hb]);
+    outline = { type: 'poly', points: growOrtho(P, k) };
+  }
+  parts.push({ name: 'wall', kind: 'sheet', w: L, h: Hb, outline, holes: sheet(Rm, zLo, L, Hb, 0), tabs: tabs ? { count: nTab, width: tabW, height: tabH, phi: Array.from({ length: nTab }, (_, i) => tabPhi(i)) } : null,
+    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${Hb.toFixed(2)} mm tall` + (tabs && (G.cap || G.capB) ? `, with ${nTab} tabs ${tabW} mm wide on each capped end: push them through the cap slots, then fold the ${(tabH - t).toFixed(1)} mm that comes through flat over the cap` : '') + ', seen from outside.' });
   if (o.strip) {
-    const Rs = Rm - t, zLo = zBot + (G.capB ? t : 0), zHi = zTop - (G.cap ? t : 0), w = Math.max(2, o.stripW || 10);
-    parts.push({ name: 'seam-strip', kind: 'sheet', w, h: zHi - zLo, outline: rect(w, zHi - zLo), holes: sheet(Rs, zLo, w, zHi - zLo, w / 2),
-      note: `Glue inside the seam, centred on it, from ${zLo.toFixed(2)} to ${zHi.toFixed(2)} mm. Its holes line up with the wall's.` });
+    const Rs = Rm - t, sLo = zBot + (G.capB ? t : 0), sHi = zTop - (G.cap ? t : 0), w = Math.max(2, o.stripW || 10);
+    parts.push({ name: 'seam-strip', kind: 'sheet', w, h: sHi - sLo, outline: rect(w, sHi - sLo), holes: sheet(Rs, sLo, w, sHi - sLo, w / 2),
+      note: `Glue inside the seam, centred on it, from ${sLo.toFixed(2)} to ${sHi.toFixed(2)} mm. Its holes line up with the wall's.` });
   }
   for (const [end, on, zc, bore, flipY] of [['top', G.cap, zTop - t / 2, G.boreT, 1], ['bottom', G.capB, zBot + t / 2, G.boreB, -1]]) {
     if (!on) continue;
     const holes = loops.filter(P => zoneOf(P) === end).map(P => simplifyLoop(P.map(([phi, s]) => { const r = zc / tanPsi(s); return [r * Math.cos(phi), flipY * r * Math.sin(phi)]; }), tol));
-    const circles = [{ cx: 0, cy: 0, r: R + k, layer: 'outline' }];
+    const circles = [];
+    let rOut, note;
+    if (tabs) {
+      rOut = R + t + flange;
+      // arc slots at the wall's radius: sheet thickness plus clearance across, tab width plus clearance along
+      const r1 = Rm - t / 2 - fit + k, r2 = Rm + t / 2 + fit - k, a = (tabW / 2 + fit - k) / Rm, n = 16;
+      for (let i = 0; i < nTab; i++) {
+        const cph = tabPhi(i), S = [];
+        for (let q = 0; q <= n; q++) { const ph = cph - a + 2 * a * q / n; S.push([r2 * Math.cos(ph), flipY * r2 * Math.sin(ph)]); }
+        for (let q = n; q >= 0; q--) { const ph = cph - a + 2 * a * q / n; S.push([r1 * Math.cos(ph), flipY * r1 * Math.sin(ph)]); }
+        holes.push(S);
+      }
+      note = `Disc ${(2 * rOut).toFixed(2)} mm across with ${nTab} slots for the wall's tabs, ${flange} mm flange past the wall, sits on the tube's ${end} end, seen from ${end === 'top' ? 'above' : 'below'}.`;
+    } else {
+      rOut = R;
+      note = `Disc ${(2 * R).toFixed(2)} mm across, fits inside the tube's ${end} end, seen from ${end === 'top' ? 'above' : 'below'}.`;
+    }
+    circles.push({ cx: 0, cy: 0, r: rOut + k, layer: 'outline' });
     if (bore > 0) circles.push({ cx: 0, cy: 0, r: Math.max(0.1, bore - k), layer: 'holes' });
-    parts.push({ name: `${end}-cap`, kind: 'disc', w: 2 * R, h: 2 * R, circles, holes,
-      note: `Disc ${(2 * R).toFixed(2)} mm across, fits inside the tube's ${end} end, seen from ${end === 'top' ? 'above' : 'below'}.` });
+    parts.push({ name: `${end}-cap`, kind: 'disc', w: 2 * rOut, h: 2 * rOut, circles, holes, slots: tabs ? nTab : 0, note });
   }
   for (const p of parts) {
     let cut = p.holes.reduce((n, P) => n + polyLen(P), 0), open = p.holes.reduce((n, P) => n + Math.abs(polyArea(P)), 0);
-    if (p.outline) cut += 2 * (p.outline.x1 - p.outline.x0 + p.outline.y1 - p.outline.y0);
+    if (p.outline) cut += p.outline.type === 'poly' ? polyLen(p.outline.points) : 2 * (p.outline.x1 - p.outline.x0 + p.outline.y1 - p.outline.y0);
     for (const c of p.circles || []) { cut += TAU * c.r; if (c.layer === 'holes') open += Math.PI * c.r * c.r; }
     p.cutLength = cut; p.openArea = open;
   }
   return { parts, kerf, thickness: t, midRadius: Rm };
 }
 const fmt = v => (Math.round(v * 1000) / 1000).toString();
+// Grow a counter-clockwise rectilinear polygon outwards by d (every corner is a right angle).
+function growOrtho(P, d) {
+  if (!d) return P;
+  const n = P.length, N = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [dy / l, -dx / l]; };
+  return P.map((v, i) => { const n1 = N(P[(i + n - 1) % n], v), n2 = N(v, P[(i + 1) % n]); return [v[0] + d * (n1[0] + n2[0]), v[1] + d * (n1[1] + n2[1])]; });
+}
 function partBounds(p) {
+  if (p.outline && p.outline.type === 'poly') { const xs = p.outline.points.map(q => q[0]), ys = p.outline.points.map(q => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; }
   if (p.outline) return [p.outline.x0, p.outline.y0, p.outline.x1, p.outline.y1];
   const r = Math.max(...p.circles.map(c => c.r)); return [-r, -r, r, r];
 }
@@ -967,7 +1010,7 @@ function svgOf(p, meta) {
   const [x0, y0, x1, y1] = partBounds(p), pad = 2, X = x => fmt(x - x0 + pad), Y = y => fmt(y1 - y + pad);
   const W = x1 - x0 + 2 * pad, Hh = y1 - y0 + 2 * pad, path = P => 'M' + P.map(q => X(q[0]) + ' ' + Y(q[1])).join('L') + 'Z';
   const holes = p.holes.map(P => `<path d="${path(P)}"/>`).concat((p.circles || []).filter(c => c.layer === 'holes').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`));
-  const outer = p.outline ? [`<rect x="${X(p.outline.x0)}" y="${Y(p.outline.y1)}" width="${fmt(p.outline.x1 - p.outline.x0)}" height="${fmt(p.outline.y1 - p.outline.y0)}"/>`]
+  const outer = p.outline && p.outline.type === 'poly' ? [`<path d="${path(p.outline.points)}"/>`] : p.outline ? [`<rect x="${X(p.outline.x0)}" y="${Y(p.outline.y1)}" width="${fmt(p.outline.x1 - p.outline.x0)}" height="${fmt(p.outline.y1 - p.outline.y0)}"/>`]
     : p.circles.filter(c => c.layer === 'outline').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}mm" height="${fmt(Hh)}mm" viewBox="0 0 ${fmt(W)} ${fmt(Hh)}">\n` +
     `<title>${meta.title}</title>\n<desc>${meta.desc}</desc>\n` +
@@ -981,7 +1024,8 @@ function dxfOf(p) {
   const circ = (c, layer, col) => o.push('0', 'CIRCLE', '8', layer, '62', col, '10', fmt(c.cx), '20', fmt(c.cy), '30', '0', '40', fmt(c.r));
   for (const P of p.holes) poly(P, 'CUT_HOLES', '1');
   for (const c of p.circles || []) circ(c, c.layer === 'holes' ? 'CUT_HOLES' : 'CUT_OUTLINE', c.layer === 'holes' ? '1' : '5');
-  if (p.outline) { const b = p.outline; poly([[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]], 'CUT_OUTLINE', '5'); }
+  if (p.outline && p.outline.type === 'poly') poly(p.outline.points, 'CUT_OUTLINE', '5');
+  else if (p.outline) { const b = p.outline; poly([[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]], 'CUT_OUTLINE', '5'); }
   o.push('0', 'ENDSEC', '0', 'EOF');
   return o.join('\n') + '\n';
 }

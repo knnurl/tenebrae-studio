@@ -55,6 +55,9 @@ Light reaches the room only where both shells are open along the ray from the LE
 - **Laser cut** opens each cylinder wall into a flat rectangle at mid-thickness, with caps as discs that fit inside the tube ends. Each part comes as SVG and DXF R12 in millimetres: red holes cut first, blue outlines last.
   - **Kerf:** holes are traced half a kerf inside, through the distance field, and outlines grown half a kerf, so parts cut to size.
   - **Seam backing strip:** an optional strip glued inside the seam carries the same holes, mapped to its smaller radius, so it blocks no light.
+  - **Cap joint:**
+    - *Tabs into slots* (default): the wall's capped ends carry tabs that push through arc slots in the cap, and the extra folds flat over the cap. Slots cut to sheet thickness plus clearance. The cap's flange reaches past the wall, so the wall pattern stops where rays clear it, keeping the preview exact.
+    - *Press-fit inside*: plain discs that press into the tube ends.
   - **Sheet thickness** sets the wall thickness of both shells; the menu warns when the sheet is too thick to roll to the radius.
   - SVGs print at 1:1 for a card test.
 - **Save preview image (PNG)** saves the current view.
@@ -165,6 +168,7 @@ For headless screenshots, `index.html?frames=N` caps soft-shadow refinement at N
 - **Print coupons first:** flat plates 3 and 4 mm thick with 2–10 mm slot and hole ladders, lit by the real LED. They settle the true blur, which holes survive and how much the material leaks.
 - **Crispness:** keep openings at least 5× the emitter. On the table-uplight preset's shells, 20–24 slots give crisp rays with a 1.4 mm die; its 36 slots give softer, finer rays.
 - **Material:** matte black PETG or ASA. PLA softens around 60 °C, and light colours glow.
+- **Laser cuts straight through:** holes in a sheet have walls square to it, not along the rays. Light arriving at elevation ψ loses about t × tan ψ of opening, which is 1.4 mm at 60° on 0.8 mm sheet; the preview models ray-aligned holes, so thinner sheet stays closer to it.
 - **Laser instead of FDM for twisted walls:** steeply twisted slots (twist above about 0.8) overhang past what FDM can bridge and fail as spaghetti. Laser-cut walls avoid the problem entirely; use 0.5–1 mm polypropylene or black card and the laser-cut sheet profile.
 - **FDM:** print capped cylinders cap-down; no supports needed. With separate caps, print the wall tubes upright and the cap discs flat; the discs sit on the tube ends at the joint planes listed in `interface.json`. Slots on vertical walls print cleanly. Rings and dots leave overhanging hole tops (no teardrop shaping yet). Split spheres throw a dark ring from the seam band; spheres suit SLS better.
 - **Light:** Luminus SST-20 2700K CRI 95 on a 10 mm copper board, on an aluminium stem at the shell centre (±3 mm). Mean Well LDD-700L at 350–700 mA from a certified 24 V adapter, dimmed with its analogue input to avoid PWM flicker on moving shadows.

@@ -308,5 +308,42 @@ for (const pr of X.PRESETS) {
   const GS = X.buildShell(sp, {gen:'slots',invert:false,phase:0,params:{N:20,twist:0,wobA:0,wobK:0,duty:0.4}}, {res:1,minWeb:1.2,minHole:1,split:false,seam:4});
   check('flat: spheres are refused', !!X.flatParts(GS, {}).error);
 }
+// Tabbed laser caps: tabs and slots line up, fit with the set clearance, and the flange shades nothing
+{
+  const d = X.defaultState(); d.shells.forEach(s => { s.t = 0.8; }); X.fitOuter(d);
+  const pa = X.effectivePatterns(d), ca = X.effectiveCaps(d), cb = X.effectiveCapsBot(d), m = 4;
+  const o = (k, fl) => ({res:d.res,fillSmall:true,minWeb:1.2,minHole:1,split:false,seam:4,mirror:k===1&&d.link.mirror,capPattern:ca[k],capFollow:X.capFollows(d,k),capBotPattern:cb[k],capBotFollow:X.capFollowsBot(d,k),capsSeparate:true,flange:fl});
+  for (const k of [0, 1]) {
+    const G = X.buildShell(d.shells[k], pa[k], o(k, m)), who = k ? 'outer' : 'inner', t = G.t, Rm = G.R + t / 2, Ro = G.Ro;
+    // a ray from the light through the top of the wall pattern passes just under the flange's outer edge
+    const zAtFlange = G.sWallHi * (Ro + m) / Ro, zAtFlangeB = G.sWallLo * (Ro + m) / Ro;
+    check(`tabs ${who}: wall pattern stops where rays clear the flange`, zAtFlange <= G.zTop - t + 1e-9 && zAtFlangeB >= G.zBot + t - 1e-9, `top ray ${zAtFlange.toFixed(3)} <= ${(G.zTop - t).toFixed(3)}, bottom ${zAtFlangeB.toFixed(3)} >= ${(G.zBot + t).toFixed(3)}`);
+    const opt = { kerf: 0, strip: false, joint: 'tabs', tabs: 8, tabW: 10, tabExtra: 3, flange: m, fit: 0.1 };
+    const F = X.flatParts(G, opt), wall = F.parts.find(p => p.name === 'wall'), P = wall.outline.points, tabH = t + 3;
+    let ortho = true; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; if (Math.abs(a[0] - b[0]) > 1e-9 && Math.abs(a[1] - b[1]) > 1e-9) ortho = false; }
+    const wantA = wall.w * wall.h + 2 * 8 * 10 * tabH;
+    check(`tabs ${who}: wall outline is closed and rectilinear, body plus 2 x 8 tabs`, ortho && Math.abs(X.polyArea(P) - wantA) < 1e-6, `${X.polyArea(P).toFixed(3)} vs ${wantA.toFixed(3)} mm2, body ${wall.h.toFixed(2)} mm tall`);
+    check(`tabs ${who}: wall body runs between the joint planes`, Math.abs(wall.h - (G.zTop - G.zBot - 2 * t)) < 1e-9);
+    let ok = true; const info = [];
+    for (const end of ['top-cap', 'bottom-cap']) {
+      const cap = F.parts.find(p => p.name === end), slots = cap.holes.slice(-8), flip = end === 'top-cap' ? 1 : -1;
+      if (Math.abs(cap.circles[0].r - (G.R + t + m)) > 1e-9) ok = false;
+      for (let i = 0; i < 8; i++) {
+        const S = slots[i], r = S.map(q => Math.hypot(q[0], q[1])), ang = S.map(q => Math.atan2(flip * q[1], q[0]));
+        const rw = Math.max(...r) - Math.min(...r), phi = (i + 0.5) * 2 * Math.PI / 8, tabX = phi * Rm;
+        let a0 = Infinity, a1 = -Infinity; for (const a of ang) { const w = a - phi - 2 * Math.PI * Math.round((a - phi) / (2 * Math.PI)); a0 = Math.min(a0, w); a1 = Math.max(a1, w); }
+        const arc = (a1 - a0) * Rm;
+        if (Math.abs(rw - (t + 0.2)) > 1e-6 || Math.abs(arc - 10.2) > 1e-6 || Math.abs((a0 + a1) / 2) > 1e-9) ok = false;
+        if (i === 0) info.push(`${end}: slot ${rw.toFixed(3)} x ${arc.toFixed(3)} mm at ${(phi * 180 / Math.PI).toFixed(2)} deg, tab centre ${tabX.toFixed(3)} mm along the wall`);
+      }
+    }
+    check(`tabs ${who}: slots sit under the tabs, sheet + 2 x 0.1 mm across, tab + 2 x 0.1 mm along`, ok, info.join('; '));
+    const FK = X.flatParts(G, Object.assign({}, opt, { kerf: 0.2 })), wk = FK.parts.find(p => p.name === 'wall');
+    const grow = X.polyArea(wk.outline.points) - X.polyArea(P), per = (() => { let l = 0; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; l += Math.hypot(b[0] - a[0], b[1] - a[1]); } return l; })();
+    check(`tabs ${who}: kerf grows the outline by half a kerf all round`, Math.abs(grow - per * 0.1) / (per * 0.1) < 0.01, `+${grow.toFixed(1)} mm2 vs ${(per * 0.1).toFixed(1)}`);
+    const svg = X.svgOf(wk, { title: 'w', desc: '' }), dxf = X.dxfOf(wk);
+    check(`tabs ${who}: SVG and DXF both carry the tabbed outline`, (svg.split('id="cut-outline"')[1].match(/<path /g) || []).length === 1 && (dxf.match(/\nPOLYLINE\n/g) || []).length === wk.holes.length + 1);
+  }
+}
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 process.exit(fails ? 1 : 0);
