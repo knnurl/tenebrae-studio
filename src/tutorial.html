@@ -219,8 +219,9 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
 
       <section class="step" id="step-8">
         <h3><i class="num">8</i>Make</h3>
-        <p>Choose <span class="ui">FDM</span> or <span class="ui">SLS / MJF</span>; this sets the minimum web, minimum hole and clearance. The line under it says whether the design is ready. When it is, use <span class="ui">Export print files</span> in the header.</p>
-        <p>For capped cylinders, <span class="ui">Export caps as separate parts</span> exports each shell as a wall tube plus flat cap discs, one wall thick, that sit on the tube ends. Both print without support, and the outer shell no longer needs a seam split: slide the tubes over the light, then fit the caps.</p>
+        <p>Choose <span class="ui">FDM</span>, <span class="ui">SLS / MJF</span> or <span class="ui">Laser-cut sheet</span>; this sets the minimum web, minimum hole and clearance. The line under it says whether the design is ready. When it is, use <span class="ui">Export</span> in the header.</p>
+        <p>Then open <span class="ui">Export</span> in the header. Choose <span class="ui">3D print (STL)</span> or <span class="ui">Laser cut (SVG, DXF)</span>, which shells to export, and whether caps are attached, separate or left out. Separate caps become flat discs, so tubes and discs both print without support and the outer shell needs no seam split.</p>
+        <p>For laser cutting, set the sheet thickness in the menu: 0.5 to 1 mm polypropylene or black card rolls cleanly. Each wall opens into a rectangle that rolls back into the tube, caps become discs that press into the tube ends, and a backing strip with matching holes closes the seam. Kerf is compensated. <span class="ui">Save preview image</span> saves the current view as a PNG.</p>
         <p class="sets">In <span class="ui">Advanced</span> you can change the minimums, the shell clearance, filling of undersized holes, sphere splitting and the grid resolution. A coarser grid gives smaller files.</p>
       </section>
 
@@ -268,6 +269,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
       <ol class="plain">
         <li><strong>Print coupons first.</strong> Flat plates 3 and 4 mm thick, with slot and hole ladders from 2 to 10 mm. Shine the real LED through them onto a wall. You'll learn the true blur, which holes FDM keeps open, and how much light the material leaks.</li>
         <li><strong>Use matte black PETG or ASA.</strong> PLA softens around 60 °C, and light-coloured material glows, which washes out contrast.</li>
+        <li><strong>Prefer laser for steep twists.</strong> Slots twisted past about 0.8 overhang more than FDM can bridge and turn to spaghetti; laser-cut thin sheet has no such limit.</li>
         <li><strong>Print capped cylinders cap-down.</strong> The cap sits flat on the bed and needs no support. A shell capped at both ends is a half at a time: each half prints cap-down with its flat seam face up. With separate caps, print the tubes upright and the discs flat. Slots on vertical walls print cleanly; rings and dots leave overhanging hole tops, because Tenebrae doesn't make teardrop shapes yet.</li>
         <li><strong>Mount the light at the centre.</strong> SST-20 on a 10 mm copper board, on an aluminium stem at the shell centre, within ±3 mm. Drive it with a Mean Well LDD-700L at 350 to 700 mA from a certified 24 V adapter, and dim with the driver's analogue input.</li>
         <li><strong>Let the outer shell turn with friction.</strong> Run its bottom rim on a printed V-groove race with 6 mm BBs, plus a felt pad for drag so it stays where you leave it. <code>interface.json</code> has the rim diameters and gaps for designing this in CAD.</li>
@@ -276,7 +278,7 @@ footer{border-top:1px solid var(--rule);color:var(--ink-2);font-size:15px;max-wi
 
     <section id="export">
       <h2>What the export contains</h2>
-      <p><span class="ui">Export print files</span> builds the meshes at the full grid resolution, checks each one is watertight, and downloads one zip:</p>
+      <p>The 3D print export builds the meshes at the full grid resolution, checks each one is watertight, and downloads one zip. The laser export downloads an SVG and a DXF per part instead, with a <code>checks.txt</code> listing sheet sizes and cut length.</p>
 <pre><code>inner-shell.stl     one watertight part (lower/upper halves when split;
                     -wall, -top-cap and -bottom-cap when caps are separate)
 outer-shell.stl

@@ -218,7 +218,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
         if (sh.capBot.on) slider(b, 'Outer bottom bore radius (mm)', sh.capBot, 'bore', 0, 40, 0.5, 'geom');
         continue;
       }
-      slider(b, 'Wall (mm)', sh, 't', 1, 8, 0.1, 'geom');
+      slider(b, 'Wall (mm)', sh, 't', 0.2, 8, 0.05, 'geom');
       if (k === 1) { slider(b, 'Outer bottom, below the light (mm)', sh, 'zBot', -320, 0, 0.5, 'geom'); }
       slider(b, sh.capBot.on ? 'Corner band, wall to bottom cap (mm)' : 'Bottom rim (mm)', sh, 'rimBot', 1, 60, 0.5, 'geom');
       slider(b, sh.cap.on ? 'Corner band, wall to cap (mm)' : 'Top rim (mm)', sh, 'rimTop', 1, 60, 0.5, 'geom');
@@ -296,11 +296,8 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
   }
 
   function makeSection(b) {
-    select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF']], 'geom', true);
-    if (S.shells.some(sh => sh.shape === 'cylinder' && (sh.cap.on || sh.capBot.on))) {
-      check(b, 'Export caps as separate parts', S.process, 'capsSeparate', 'geom', true);
-      if (S.process.capsSeparate) note(b, 'Each capped cylinder exports as a wall tube plus flat cap discs, one wall thick, that sit on the tube ends. Tubes print upright and discs print flat, both without support. The outer shell no longer needs a seam split to assemble.');
-    }
+    select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF'], ['Laser', 'Laser-cut sheet']], 'geom', true);
+    note(b, `Format, caps and which shells to export are in the Export menu: ${exportSummary()}.`);
     UI.makeNote = note(b, ''); makeHint();
     if (!ADV()) return;
     slider(b, 'Minimum web (mm)', S.process, 'minWeb', 0.6, 6, 0.1, 'geom');
@@ -445,18 +442,24 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     beatHint(); sharpHint(); refreshSummaries();
     clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }, 600);
   }
+  const PROFILES = {
+    FDM: { minWeb: 2, minHole: 3, clearance: 0.4, split: true },
+    SLS: { minWeb: 1.5, minHole: 2, clearance: 0.5, split: false },
+    Laser: { minWeb: 1.2, minHole: 1, clearance: 0.5, split: false },
+  };
   function applyProfile() {
     if (UI.lastProfile) {
-      Object.assign(S.process, S.process.profile === 'SLS' ? { minWeb: 1.5, minHole: 2, clearance: 0.5, split: false } : { minWeb: 2, minHole: 3, clearance: 0.4, split: true });
+      Object.assign(S.process, PROFILES[S.process.profile] || PROFILES.FDM);
       renderSidebar();
     }
     UI.lastProfile = S.process.profile;
   }
   // Split at the light's plane: spheres when the process asks for it, and any outer shell capped at both
   // ends, because it could not otherwise close around the inner shell.
-  const sepCaps = (st, k) => st.process.capsSeparate && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
+  const capsApart = st => st.process.capsSeparate || (st.export && st.export.format === 'laser');
+  const sepCaps = (st, k) => capsApart(st) && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
   const needsSplit = (st, k) => (st.shells[k].shape === 'sphere' && st.process.split) || (k === 1 && st.shells[1].cap.on && st.shells[1].capBot.on && !sepCaps(st, 1));
-  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: st.process.capsSeparate, fdm: st.process.profile === 'FDM' }; }
+  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), fdm: st.process.profile === 'FDM' }; }
   function opts(k, res, caps, capsB) { return optsFor(S, k, res, caps, capsB); }
   function build(draft) {
     const res = draft ? Math.min(2.5, S.res * 2) : S.res;
@@ -548,7 +551,8 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     const n = $('#notes'); n.innerHTML = '';
     for (const x of notes) n.append(el('li', { class: x.bad ? 'bad' : x.ok ? 'ok' : 'warn' }, x.t));
     const blocked = !(G[0] && G[0].ok && G[1] && G[1].ok) || notes.some(x => x.bad && /overlap/.test(x.t));
-    $('#export').disabled = blocked;
+    UI.blocked = blocked ? (notes.find(x => x.bad) || {}).t || 'Fix the blocked shell first.' : '';
+    if (!$('#exportMenu').hidden) renderExportMenu();
   }
 
   // ---------- renderer / camera ----------
@@ -617,6 +621,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     R.draw({ vp, lamp: [0, 0, S.room.lampZ], rot: [UI.animA * DEG, (S.motion.offset + UI.animB) * DEG], src: S.source,
       samples: UI.playing ? 16 : 8, frame: accN, power: 2.5e6, lightCol: LIGHT[S.source.color], ambient: S.room.ambient,
       exposure: S.room.exposure, jitter: jit, count: accN });
+    if (UI.shot) { const f = UI.shot; UI.shot = null; f(); }  // capture in the same frame as the draw
     accN++;
     const st = $('#refine');
     st.textContent = pt || !R.floatOK ? '' : accN < maxN ? `Refining soft shadows ${Math.round(100 * accN / maxN)}%` : '';
@@ -653,15 +658,124 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       source: S.source,
     };
   }
+  // ---------- export menu ----------
+  const EX = () => S.export;
+  const shellSet = () => ({ both: [0, 1], inner: [0], outer: [1] })[EX().shells] || [0, 1];
+  const capsMode = () => EX().omitCaps ? 'omit' : capsApart(S) ? 'separate' : 'attached';
+  const anyCaps = () => shellSet().some(k => S.shells[k].cap.on || S.shells[k].capBot.on);
+  function exportSummary() {
+    const f = EX().format === 'laser' ? 'laser cut' : '3D print', c = { attached: 'caps attached', separate: 'caps separate', omit: 'caps left out' }[capsMode()];
+    return `${f}, ${EX().shells === 'both' ? 'both shells' : EX().shells + ' shell'}${anyCaps() ? ', ' + c : ''}`;
+  }
+  function exportChanged(geom) {
+    if (geom) build(false);
+    renderExportMenu(); renderSidebar();
+    clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }, 600);
+  }
+  function renderExportMenu() {
+    const m = $('#exportMenu'); m.innerHTML = ''; uid = uid || 0;
+    const laser = EX().format === 'laser', spheres = shellSet().filter(k => S.shells[k].shape === 'sphere');
+    const seg = (label, options, cur, pick) => {
+      const g = el('div', { class: 'seg', role: 'group', 'aria-label': label });
+      for (const [v, t, why] of options) g.append(el('button', { type: 'button', 'aria-pressed': cur === v ? 'true' : 'false', disabled: why ? '' : false, title: why || '', onclick: () => pick(v) }, t));
+      m.append(el('div', { class: 'row' }, el('span', {}, label), g));
+    };
+    m.append(el('h3', {}, 'Export'));
+    seg('Format', [['stl', '3D print (STL)'], ['laser', 'Laser cut (SVG, DXF)', spheres.length ? "Spheres can't be opened flat" : '']], EX().format, v => {
+      if (v === EX().format) return;
+      EX().format = v;
+      if (v === 'laser' && S.process.profile !== 'Laser') { S.process.profile = 'Laser'; Object.assign(S.process, PROFILES.Laser); UI.lastProfile = 'Laser'; toast('Process set to laser-cut sheet: 1.2 mm webs and 1 mm holes. Set the sheet thickness in this menu.'); }
+      if (v === 'stl' && S.process.profile === 'Laser') { S.process.profile = 'FDM'; Object.assign(S.process, PROFILES.FDM); UI.lastProfile = 'FDM'; toast('Process set back to FDM.'); }
+      exportChanged(true);
+    });
+    seg('Shells', [['both', 'Both'], ['inner', 'Inner'], ['outer', 'Outer']], EX().shells, v => { EX().shells = v; exportChanged(false); });
+    if (anyCaps()) seg('Caps', [['attached', 'Attached', laser ? 'Laser-cut caps are always separate discs' : ''], ['separate', 'Separate'], ['omit', 'Leave out']], capsMode(), v => {
+      S.process.capsSeparate = v !== 'attached'; EX().omitCaps = v === 'omit'; exportChanged(true);
+    });
+    if (laser) {
+      const box = el('div', { class: 'nums' });
+      const num2 = (label, get, set, min, max, step) => {
+        const id = 'x' + (uid++), inp = el('input', { type: 'number', id, min, max, step, value: get() });
+        inp.addEventListener('change', () => { const v = Math.min(max, Math.max(min, +inp.value)); if (isFinite(v)) set(v); });
+        box.append(el('label', { for: id }, label), inp);
+      };
+      num2('Sheet thickness (mm)', () => S.shells[0].t, v => { S.shells.forEach(sh => { sh.t = v; }); exportChanged(true); }, 0.2, 6, 0.05);
+      num2('Kerf (mm)', () => EX().kerf, v => { EX().kerf = v; exportChanged(false); }, 0, 0.6, 0.01);
+      const id = 'x' + (uid++), cb = el('input', { type: 'checkbox', id, checked: EX().strip ? '' : false });
+      cb.addEventListener('change', () => { EX().strip = cb.checked; exportChanged(false); });
+      box.append(el('div', { class: 'ctl chk' }, cb, el('label', { for: id }, 'Seam backing strip')));
+      if (EX().strip) num2('Strip width (mm)', () => EX().stripW, v => { EX().stripW = v; exportChanged(false); }, 4, 40, 1);
+      m.append(box);
+      // Rolling a sheet into the tube bends it to a surface strain of about t / 2R.
+      const strain = Math.max(...shellSet().map(k => S.shells[k].t / (2 * S.shells[k].R)));
+      if (strain > 0.015) m.append(el('p', { class: 'why' }, `A ${S.shells[0].t} mm sheet bends ${(strain * 100).toFixed(1)}% to roll at this radius; most sheet cracks or springs back above about 1.5%. Lampshade polypropylene or black card at 0.5–1 mm rolls cleanly.`));
+      note(m, 'Walls open into rectangles at mid-thickness and caps become discs that fit inside the tube ends. Kerf is compensated, and the backing strip carries matching holes so the seam stays invisible. SVGs print at 1:1 for a card test.');
+    } else {
+      note(m, capsMode() === 'attached' ? 'Each shell is one watertight part, split into halves where it has to be. CAD profiles and the Fusion proxy script come with it.'
+        : capsMode() === 'separate' ? 'Caps become flat discs that sit on the wall tube ends; tubes print upright and discs print flat. CAD profiles and the Fusion script come with it.'
+        : 'Only the wall tubes are exported, with flat joint rings at the capped ends.');
+    }
+    const act = el('div', { class: 'act' });
+    const why = UI.blocked || (laser && spheres.length ? "Spheres can't be laser cut flat. Export the cylinder shell only, or choose 3D print." : '');
+    act.append(el('button', { class: 'btn primary', type: 'button', id: 'doExport', disabled: why ? '' : false, onclick: () => { closeMenu(); exportPack(); } }, laser ? 'Export cut files' : 'Export print files'));
+    if (why) act.append(el('p', { class: 'why' }, why));
+    act.append(el('button', { class: 'btn', type: 'button', onclick: () => { closeMenu(); savePreview(); } }, 'Save preview image (PNG)'));
+    m.append(act);
+  }
+  function openMenu() { renderExportMenu(); $('#exportMenu').hidden = false; $('#export').setAttribute('aria-expanded', 'true'); const f = $('#exportMenu button[aria-pressed="true"]'); f && f.focus(); }
+  function closeMenu() { $('#exportMenu').hidden = true; $('#export').setAttribute('aria-expanded', 'false'); }
+  document.addEventListener('pointerdown', e => { if (!$('#exportMenu').hidden && !e.target.closest('.exp')) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#exportMenu').hidden) { closeMenu(); $('#export').focus(); } });
+
+  function savePreview() {
+    if (!R) { toast('The 3D preview is off in this browser.', true); return; }
+    const grab = () => canvas.toBlob(b => b ? save(`tenebrae-view-${new Date().toISOString().slice(0, 10)}.png`, b, 'preview image') : toast('Could not capture the preview.', true), 'image/png');
+    if (R.floatOK) { R.present(Math.max(1, accN), S.room.exposure); grab(); } else { UI.shot = grab; dirty(); }
+  }
+
+  async function exportLaser(btn) {
+    const files = [], report = [`Tenebrae cut files, ${new Date().toISOString()}`, `Sheet ${S.shells[0].t} mm, kerf ${EX().kerf} mm, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`,
+      'Red = holes (cut first), blue = outlines (cut last). Everything is drawn as seen from outside the lamp.', ''];
+    let total = 0;
+    for (const k of shellSet()) {
+      const g = G[k], who = k ? 'outer' : 'inner';
+      btn.textContent = `Tracing ${who} shell…`; await new Promise(r => setTimeout(r, 0));
+      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW });
+      if (F.error) { report.push(`${who}: ${F.error}`); continue; }
+      for (const p of F.parts) {
+        if (EX().omitCaps && p.kind === 'disc') continue;
+        const name = `${who}-${p.name}`, meta = { title: `Tenebrae ${name}`, desc: `${p.note} Sheet ${F.thickness} mm, kerf ${F.kerf} mm.` };
+        files.push({ name: name + '.svg', data: new TextEncoder().encode(svgOf(p, meta)) });
+        files.push({ name: name + '.dxf', data: new TextEncoder().encode(dxfOf(p)) });
+        total += p.cutLength;
+        report.push(`${name}: ${p.w.toFixed(1)} x ${p.h.toFixed(1)} mm, ${p.holes.length} cut-outs, ${(p.cutLength / 1000).toFixed(2)} m of cut. ${p.note}`);
+      }
+    }
+    report.push('', `Total cut length ${(total / 1000).toFixed(2)} m.`, 'Assembly: roll each wall with the drawn face outwards, glue the backing strip inside the seam, then press the cap discs into the tube ends.');
+    for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
+    return { files, report, zipName: `tenebrae-cut-${new Date().toISOString().slice(0, 10)}.zip`, label: 'cut files', ok: true };
+  }
+
   async function exportPack() {
-    const btn = $('#export'); btn.disabled = true; const old = btn.textContent; btn.textContent = 'Building meshes…';
+    const btn = $('#export'); btn.disabled = true; const old = btn.innerHTML; btn.textContent = 'Building…';
     await new Promise(r => setTimeout(r, 30));
     try {
       clearTimeout(fullT); clearTimeout(buildT); build(false);
       if (!(G[0].ok && G[1].ok)) { toast('Fix the blocked shell before exporting.', true); return; }
+      if (EX().format === 'laser') {
+        const L = await exportLaser(btn), enc0 = new TextEncoder();
+        L.files.push({ name: 'design.json', data: enc0.encode(JSON.stringify(S, null, 2)) });
+        L.files.push({ name: 'interface.json', data: enc0.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
+        L.files.push({ name: 'checks.txt', data: enc0.encode(L.report.join('\n') + '\n') });
+        btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
+        await save(L.zipName, new Blob(zipStore(L.files), { type: 'application/zip' }), L.label);
+        return;
+      }
+      const keep = (k, part) => shellSet().includes(k) && !(EX().omitCaps && /cap$/.test(part.suffix || ''));
       const files = [], report = [`Tenebrae export, ${new Date().toISOString()}`, `Grid ${S.res} mm, process ${S.process.profile}, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`, ''];
       let allOK = true;
       for (const k of [0, 1]) for (const part of G[k].parts) {
+        if (!keep(k, part)) continue;
         const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}.stl`;
         btn.textContent = `Meshing ${name}…`; await new Promise(r => setTimeout(r, 0));
         const m = buildMesh(G[k], part), c = checkMesh(m, part.holes, part.ends);
@@ -677,6 +791,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       // CAD profiles: one revolved outline per printed part, plus the Fusion script that turns them into bodies
       const profParts = [];
       for (const k of [0, 1]) for (const part of G[k].parts) {
+        if (!keep(k, part)) continue;
         const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}`, segments = shellProfile(G[k], part);
         if (!profileClosed(segments)) { allOK = false; report.push(`${name} profile: CHECK FAILED (outline not closed)`); }
         profParts.push({ name, stl: name + '.stl', volume: +profileVolume(segments).toFixed(3), segments });
@@ -691,7 +806,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
       if (!allOK) toast('A mesh check failed; see checks.txt in the zip.', true);
       await save(`tenebrae-${new Date().toISOString().slice(0, 10)}.zip`, blob, 'print files');
     } catch (e) { console.error(e); toast('Export failed: ' + e.message, true); }
-    finally { btn.textContent = old; renderChecks(); }
+    finally { btn.innerHTML = old; btn.disabled = false; renderChecks(); }
   }
 
   // ---------- header wiring ----------
@@ -707,7 +822,7 @@ const FUSION_PY = /*FUSION_PY*/'', FUSION_MANIFEST = /*FUSION_MANIFEST*/'';
     renderSidebar(); build(false); changed('motion'); ps.blur();
   });
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
-  $('#export').addEventListener('click', exportPack);
+  $('#export').addEventListener('click', () => { if ($('#exportMenu').hidden) openMenu(); else closeMenu(); });
   $('#savejson').addEventListener('click', () => save('tenebrae-design.json', JSON.stringify(S, null, 2), 'design'));
   $('#loadjson').addEventListener('click', () => $('#file').click());
   $('#file').addEventListener('change', e => {

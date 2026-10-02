@@ -26,6 +26,22 @@ header{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:8px 16p
 .seg button+button{border-left:1px solid var(--rule)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
 .spacer{flex:1}
+.exp{position:relative}
+.menu[hidden]{display:none}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;width:min(360px,92vw);background:var(--panel);border:1px solid var(--rule);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.2);padding:14px 16px 16px;display:grid;gap:12px}
+.menu h3{margin:0;font-size:17px;font-weight:600}
+.menu .row{display:grid;gap:5px}
+.menu .row > span{font-size:13.5px;color:var(--ink-2)}
+.menu .seg{display:flex;width:100%}
+.menu .seg button{flex:1;padding:6px 6px;font-size:14px;line-height:1.2}
+.menu .seg button:disabled{opacity:.4;cursor:not-allowed}
+.menu .nums{display:grid;grid-template-columns:1fr 84px;gap:7px 10px;align-items:center;font-size:14px}
+.menu .nums input[type=number]{width:84px;text-align:right;background:var(--field);border:1px solid var(--rule);border-radius:4px;padding:2px 6px}
+.menu .nums .ctl.chk{grid-column:1/-1}
+.menu .hint{margin:0}
+.menu .act{display:grid;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+.menu .act .btn{width:100%;padding:8px 12px}
+.menu .why{color:var(--bad);font-size:13.5px;margin:0}
 #preset{max-width:230px}
 @media (max-width:1280px){.mark-word span{display:none}}
 select{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:4px 8px}
@@ -98,6 +114,7 @@ td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:va
    the controls follow it, and the checks strip goes last. The sidebar must not be its own scroller here:
    with overscroll-behavior:contain it swallows swipes instead of passing them to the page. */
 @media (max-width:900px){
+  .menu{position:fixed;left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;max-height:80vh;overflow:auto}
   .app{display:flex;flex-direction:column;height:auto}
   main{display:contents}
   header{order:0;gap:10px}
@@ -129,7 +146,7 @@ td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:va
     <div class="spacer"></div>
     <button class="btn ghost" id="loadjson">Open design</button>
     <button class="btn" id="savejson">Save design</button>
-    <button class="btn primary" id="export">Export print files</button>
+    <div class="exp"><button class="btn primary" id="export" aria-haspopup="dialog" aria-expanded="false" aria-controls="exportMenu">Export <span aria-hidden="true">▾</span></button><div id="exportMenu" class="menu" role="dialog" aria-label="Export options" hidden></div></div>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </header>
   <aside id="side" aria-label="Design controls"></aside>

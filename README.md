@@ -47,10 +47,17 @@ Light reaches the room only where both shells are open along the ray from the LE
 - Clearance between shells, radially and between caps; the emitter must fit inside the inner shell.
 - FDM and SLS profiles. Spheres can be split at the equator with a solid seam band.
 
-**Export**
-- One zip: an STL per shell (or per half), `design.json`, `interface.json` for CAD, `checks.txt`.
-- `profile.json` and a Fusion script that build every part as a native solid body: the blank shell, with the same caps, bores, joint and seam planes as its STL. Design mating parts against these instead of converting the meshes.
-- Every mesh is checked edge-manifold, with genus matching its hole count, before it is packed.
+**Export** (dropdown in the header)
+- **Format:** *3D print (STL)* or *Laser cut (SVG, DXF)*.
+- **Shells:** both, inner only or outer only.
+- **Caps:** attached to the walls, separate parts, or left out.
+- **3D print** gives one STL per shell, half or part, each checked edge-manifold with genus matching its hole count, plus `design.json`, `interface.json` for CAD, `profile.json` with the Fusion proxy script, and `checks.txt`.
+- **Laser cut** opens each cylinder wall into a flat rectangle at mid-thickness, with caps as discs that fit inside the tube ends. Each part comes as SVG and DXF R12 in millimetres: red holes cut first, blue outlines last.
+  - **Kerf:** holes are traced half a kerf inside, through the distance field, and outlines grown half a kerf, so parts cut to size.
+  - **Seam backing strip:** an optional strip glued inside the seam carries the same holes, mapped to its smaller radius, so it blocks no light.
+  - **Sheet thickness** sets the wall thickness of both shells; the menu warns when the sheet is too thick to roll to the radius.
+  - SVGs print at 1:1 for a card test.
+- **Save preview image (PNG)** saves the current view.
 
 ---
 
@@ -82,7 +89,7 @@ The [tutorial](tutorial.html) walks one lamp from the first decision to print fi
 5. **Pattern:** generator and its main sliders. Randomize with locks to explore.
 6. **Moiré:** detune the outer shell by 2 or 3 for broad lobes, or pair an independent pattern.
 7. **Motion:** manual twist for a hand-turned lamp; bookmark the looks you like.
-8. **Make:** FDM or SLS, check the status line, then **Export print files**.
+8. **Make:** FDM, SLS or laser-cut sheet, check the status line, then **Export**: 3D print or laser cut, which shells, and caps attached, separate or left out.
 
 ---
 
@@ -158,6 +165,7 @@ For headless screenshots, `index.html?frames=N` caps soft-shadow refinement at N
 - **Print coupons first:** flat plates 3 and 4 mm thick with 2–10 mm slot and hole ladders, lit by the real LED. They settle the true blur, which holes survive and how much the material leaks.
 - **Crispness:** keep openings at least 5× the emitter. On the table-uplight preset's shells, 20–24 slots give crisp rays with a 1.4 mm die; its 36 slots give softer, finer rays.
 - **Material:** matte black PETG or ASA. PLA softens around 60 °C, and light colours glow.
+- **Laser instead of FDM for twisted walls:** steeply twisted slots (twist above about 0.8) overhang past what FDM can bridge and fail as spaghetti. Laser-cut walls avoid the problem entirely; use 0.5–1 mm polypropylene or black card and the laser-cut sheet profile.
 - **FDM:** print capped cylinders cap-down; no supports needed. With separate caps, print the wall tubes upright and the cap discs flat; the discs sit on the tube ends at the joint planes listed in `interface.json`. Slots on vertical walls print cleanly. Rings and dots leave overhanging hole tops (no teardrop shaping yet). Split spheres throw a dark ring from the seam band; spheres suit SLS better.
 - **Light:** Luminus SST-20 2700K CRI 95 on a 10 mm copper board, on an aluminium stem at the shell centre (±3 mm). Mean Well LDD-700L at 350–700 mA from a certified 24 V adapter, dimmed with its analogue input to avoid PWM flicker on moving shadows.
 - **Twist:** run the outer shell's bottom rim on a printed V-groove race with 6 mm BBs, with felt drag. Put rim ticks at quarters of the twist period shown in the Motion step.

@@ -26,6 +26,22 @@ header{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:8px 16p
 .seg button+button{border-left:1px solid var(--rule)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
 .spacer{flex:1}
+.exp{position:relative}
+.menu[hidden]{display:none}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;width:min(360px,92vw);background:var(--panel);border:1px solid var(--rule);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.2);padding:14px 16px 16px;display:grid;gap:12px}
+.menu h3{margin:0;font-size:17px;font-weight:600}
+.menu .row{display:grid;gap:5px}
+.menu .row > span{font-size:13.5px;color:var(--ink-2)}
+.menu .seg{display:flex;width:100%}
+.menu .seg button{flex:1;padding:6px 6px;font-size:14px;line-height:1.2}
+.menu .seg button:disabled{opacity:.4;cursor:not-allowed}
+.menu .nums{display:grid;grid-template-columns:1fr 84px;gap:7px 10px;align-items:center;font-size:14px}
+.menu .nums input[type=number]{width:84px;text-align:right;background:var(--field);border:1px solid var(--rule);border-radius:4px;padding:2px 6px}
+.menu .nums .ctl.chk{grid-column:1/-1}
+.menu .hint{margin:0}
+.menu .act{display:grid;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+.menu .act .btn{width:100%;padding:8px 12px}
+.menu .why{color:var(--bad);font-size:13.5px;margin:0}
 #preset{max-width:230px}
 @media (max-width:1280px){.mark-word span{display:none}}
 select{background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:4px 8px}
@@ -98,6 +114,7 @@ td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:va
    the controls follow it, and the checks strip goes last. The sidebar must not be its own scroller here:
    with overscroll-behavior:contain it swallows swipes instead of passing them to the page. */
 @media (max-width:900px){
+  .menu{position:fixed;left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:auto;max-height:80vh;overflow:auto}
   .app{display:flex;flex-direction:column;height:auto}
   main{display:contents}
   header{order:0;gap:10px}
@@ -129,7 +146,7 @@ td.ok{color:var(--ok)} td.bad{color:var(--bad);font-weight:600} td.warn{color:va
     <div class="spacer"></div>
     <button class="btn ghost" id="loadjson">Open design</button>
     <button class="btn" id="savejson">Save design</button>
-    <button class="btn primary" id="export">Export print files</button>
+    <div class="exp"><button class="btn primary" id="export" aria-haspopup="dialog" aria-expanded="false" aria-controls="exportMenu">Export <span aria-hidden="true">▾</span></button><div id="exportMenu" class="menu" role="dialog" aria-label="Export options" hidden></div></div>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </header>
   <aside id="side" aria-label="Design controls"></aside>
@@ -415,7 +432,8 @@ function buildShell(sh, pat, opts) {
   const sph = sh.shape === 'sphere';
   const R = sh.R, t = sh.t, Ro = R + t, res = opts.res;
   let zBot = sh.zBot, zTop = sh.zTop;
-  if (t < 1) errors.push('Wall thickness must be at least 1 mm.');
+  if (t < 0.2) errors.push('Wall thickness must be at least 0.2 mm.');
+  if (t < 1 && opts.fdm) warnings.push('Walls under 1 mm do not print reliably on FDM; thin sheet suits laser cutting.');
   if (sph) {
     const lim = 0.95 * R;
     if (zBot < -lim || zTop > lim) warnings.push(`Sphere openings clamped to ±${lim.toFixed(0)} mm (95% of radius).`);
@@ -990,6 +1008,155 @@ function profileClosed(segs) {
   return segs.length >= 3;
 }
 
+// ---------- Flat cutting (laser, CNC, paper): opened-up cylinder walls and cap discs ----------
+// Closed contours of the field at level `lev` (mm, hole side is field < lev), from the same marching-squares
+// walk as the mesher (solid side on the left, saddles solid-connected). Points are grid coordinates [i, j],
+// with i unwrapped across the seam so a loop that crosses it stays continuous.
+function fieldContours(G, lev) {
+  const { Nb, Nc, field } = G, val = (i, j) => field[j * Nc + i] - lev;
+  const next = new Map(), pts = new Map();
+  const pt = (id, x, y) => { if (!pts.has(id)) pts.set(id, [x, y]); return id; };
+  for (let j = 0; j < Nb - 1; j++) for (let i = 0; i < Nc; i++) {
+    const i1 = (i + 1) % Nc, v0 = val(i, j), v1 = val(i1, j), v2 = val(i1, j + 1), v3 = val(i, j + 1);
+    const s0 = v0 >= 0, s1 = v1 >= 0, s2 = v2 >= 0, s3 = v3 >= 0;
+    if (s0 === s1 && s1 === s2 && s2 === s3) continue;
+    const P = [];
+    if (s0) P.push(null);
+    if (s0 !== s1) P.push(pt(2 * (j * Nc + i), i + v0 / (v0 - v1), j));
+    if (s1) P.push(null);
+    if (s1 !== s2) P.push(pt(2 * (j * Nc + i1) + 1, i + 1, j + v1 / (v1 - v2)));
+    if (s2) P.push(null);
+    if (s2 !== s3) P.push(pt(2 * ((j + 1) * Nc + i), i + v3 / (v3 - v2), j + 1));
+    if (s3) P.push(null);
+    if (s3 !== s0) P.push(pt(2 * (j * Nc + i) + 1, i, j + v0 / (v0 - v3)));
+    for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; if (a !== null && b !== null) next.set(a, b); }
+  }
+  const loops = [], seen = new Set();
+  for (const start of next.keys()) {
+    if (seen.has(start)) continue;
+    const raw = []; let id = start;
+    while (id !== undefined && !seen.has(id)) { seen.add(id); raw.push(pts.get(id)); id = next.get(id); }
+    if (id !== start || raw.length < 3) continue;
+    const out = [raw[0].slice()];
+    for (let k = 1; k < raw.length; k++) { let x = raw[k][0]; const px = out[k - 1][0]; while (x - px > Nc / 2) x -= Nc; while (x - px < -Nc / 2) x += Nc; out.push([x, raw[k][1]]); }
+    loops.push(out);
+  }
+  return loops;
+}
+const polyArea = P => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+const polyLen = P => { let l = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; l += Math.hypot(q[0] - p[0], q[1] - p[1]); } return l; };
+// Sutherland-Hodgman clip of a polygon to an axis-aligned rectangle.
+function clipRect(P, x0, y0, x1, y1) {
+  const sides = [[p => p[0] >= x0, (a, b) => [x0, a[1] + (b[1] - a[1]) * (x0 - a[0]) / (b[0] - a[0])]],
+                 [p => p[0] <= x1, (a, b) => [x1, a[1] + (b[1] - a[1]) * (x1 - a[0]) / (b[0] - a[0])]],
+                 [p => p[1] >= y0, (a, b) => [a[0] + (b[0] - a[0]) * (y0 - a[1]) / (b[1] - a[1]), y0]],
+                 [p => p[1] <= y1, (a, b) => [a[0] + (b[0] - a[0]) * (y1 - a[1]) / (b[1] - a[1]), y1]]];
+  let out = P;
+  for (const [inside, cut] of sides) {
+    const inp = out; out = [];
+    for (let i = 0; i < inp.length; i++) {
+      const a = inp[(i + inp.length - 1) % inp.length], b = inp[i];
+      if (inside(b)) { if (!inside(a)) out.push(cut(a, b)); out.push(b); } else if (inside(a)) out.push(cut(a, b));
+    }
+    if (!out.length) return out;
+  }
+  return out;
+}
+// Ramer-Douglas-Peucker on a closed loop (keeps cut files small without moving any edge by more than tol).
+function simplifyLoop(P, tol) {
+  if (P.length < 8) return P;
+  let far = 0, fd = -1;
+  for (let i = 1; i < P.length; i++) { const d = Math.hypot(P[i][0] - P[0][0], P[i][1] - P[0][1]); if (d > fd) { fd = d; far = i; } }
+  const keep = new Uint8Array(P.length); keep[0] = keep[far] = 1;
+  const rdp = (a, b) => { // indices a < b, chain P[a..b]
+    let idx = -1, dmax = tol;
+    const [ax, ay] = P[a], [bx, by] = P[b % P.length], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1e-12;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L; if (d > dmax) { dmax = d; idx = i; } }
+    if (idx >= 0) { keep[idx] = 1; rdp(a, idx); rdp(idx, b); }
+  };
+  rdp(0, far); rdp(far, P.length);
+  return P.filter((_, i) => keep[i]);
+}
+// Flat parts for one cylinder shell, in millimetres, each drawn as seen from outside the lamp.
+// wall: the wall opened at phi = 0 into a rectangle, mapped at mid-thickness (x = arc length, y = height
+// above the bottom end). strip: optional backing strip glued inside the seam; it sits one sheet further in,
+// so its holes are mapped at that smaller radius and line up with the wall's along every ray.
+// top-cap / bottom-cap: discs that fit inside the tube ends, holes mapped at the disc's mid-plane.
+// Holes are traced at field = -kerf/2 and outlines grown by kerf/2, so parts come out at true size.
+function flatParts(G, o) {
+  if (G.sph) return { error: "Spheres can't be opened flat; use a cylinder for laser cutting." };
+  const kerf = Math.max(0, o.kerf || 0), k = kerf / 2, tol = o.tol || 0.02;
+  const { R, t, zBot, zTop, Nc, Nb, bandS } = G, Rm = R + t / 2, H = zTop - zBot, L = TAU * Rm;
+  const sAt = y => { const j = Math.min(Nb - 2, Math.max(0, Math.floor(y))), f = y - j; return bandS[j] + f * (bandS[j + 1] - bandS[j]); };
+  const loops = fieldContours(G, -k).map(L0 => L0.map(([x, y]) => [x * TAU / Nc, sAt(y)]));
+  const zoneOf = P => { let s = 0; for (const p of P) s += p[1]; s /= P.length; return s >= G.sCapLo ? 'top' : s <= G.sCapBHi ? 'bottom' : 'wall'; };
+  const wall = loops.filter(P => zoneOf(P) === 'wall');
+  const tanPsi = s => Math.tan(G.psiOfS(s));
+  const sheet = (Rr, z0, w, h, xShift) => {
+    const holes = [];
+    for (const P of wall) for (const off of [-TAU, 0, TAU]) {
+      const Q = P.map(([phi, s]) => [Rr * (phi + off) + xShift, Rr * tanPsi(s) - z0]);
+      let mn = Infinity, mx = -Infinity; for (const q of Q) { if (q[0] < mn) mn = q[0]; if (q[0] > mx) mx = q[0]; }
+      if (mx < -k || mn > w + k) continue;
+      const C = clipRect(Q, -k, -k, w + k, h + k);
+      if (C.length >= 3 && Math.abs(polyArea(C)) > 1e-4) holes.push(simplifyLoop(C, tol));
+    }
+    return holes;
+  };
+  const parts = [];
+  const rect = (w, h) => ({ type: 'rect', x0: -k, y0: -k, x1: w + k, y1: h + k });
+  parts.push({ name: 'wall', kind: 'sheet', w: L, h: H, outline: rect(L, H), holes: sheet(Rm, zBot, L, H, 0),
+    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${H.toFixed(2)} mm tall, seen from outside.` });
+  if (o.strip) {
+    const Rs = Rm - t, zLo = zBot + (G.capB ? t : 0), zHi = zTop - (G.cap ? t : 0), w = Math.max(2, o.stripW || 10);
+    parts.push({ name: 'seam-strip', kind: 'sheet', w, h: zHi - zLo, outline: rect(w, zHi - zLo), holes: sheet(Rs, zLo, w, zHi - zLo, w / 2),
+      note: `Glue inside the seam, centred on it, from ${zLo.toFixed(2)} to ${zHi.toFixed(2)} mm. Its holes line up with the wall's.` });
+  }
+  for (const [end, on, zc, bore, flipY] of [['top', G.cap, zTop - t / 2, G.boreT, 1], ['bottom', G.capB, zBot + t / 2, G.boreB, -1]]) {
+    if (!on) continue;
+    const holes = loops.filter(P => zoneOf(P) === end).map(P => simplifyLoop(P.map(([phi, s]) => { const r = zc / tanPsi(s); return [r * Math.cos(phi), flipY * r * Math.sin(phi)]; }), tol));
+    const circles = [{ cx: 0, cy: 0, r: R + k, layer: 'outline' }];
+    if (bore > 0) circles.push({ cx: 0, cy: 0, r: Math.max(0.1, bore - k), layer: 'holes' });
+    parts.push({ name: `${end}-cap`, kind: 'disc', w: 2 * R, h: 2 * R, circles, holes,
+      note: `Disc ${(2 * R).toFixed(2)} mm across, fits inside the tube's ${end} end, seen from ${end === 'top' ? 'above' : 'below'}.` });
+  }
+  for (const p of parts) {
+    let cut = p.holes.reduce((n, P) => n + polyLen(P), 0), open = p.holes.reduce((n, P) => n + Math.abs(polyArea(P)), 0);
+    if (p.outline) cut += 2 * (p.outline.x1 - p.outline.x0 + p.outline.y1 - p.outline.y0);
+    for (const c of p.circles || []) { cut += TAU * c.r; if (c.layer === 'holes') open += Math.PI * c.r * c.r; }
+    p.cutLength = cut; p.openArea = open;
+  }
+  return { parts, kerf, thickness: t, midRadius: Rm };
+}
+const fmt = v => (Math.round(v * 1000) / 1000).toString();
+function partBounds(p) {
+  if (p.outline) return [p.outline.x0, p.outline.y0, p.outline.x1, p.outline.y1];
+  const r = Math.max(...p.circles.map(c => c.r)); return [-r, -r, r, r];
+}
+// SVG in millimetres. Red = holes (cut first), blue = outline (cut last); hairline strokes, no fill.
+function svgOf(p, meta) {
+  const [x0, y0, x1, y1] = partBounds(p), pad = 2, X = x => fmt(x - x0 + pad), Y = y => fmt(y1 - y + pad);
+  const W = x1 - x0 + 2 * pad, Hh = y1 - y0 + 2 * pad, path = P => 'M' + P.map(q => X(q[0]) + ' ' + Y(q[1])).join('L') + 'Z';
+  const holes = p.holes.map(P => `<path d="${path(P)}"/>`).concat((p.circles || []).filter(c => c.layer === 'holes').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`));
+  const outer = p.outline ? [`<rect x="${X(p.outline.x0)}" y="${Y(p.outline.y1)}" width="${fmt(p.outline.x1 - p.outline.x0)}" height="${fmt(p.outline.y1 - p.outline.y0)}"/>`]
+    : p.circles.filter(c => c.layer === 'outline').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}mm" height="${fmt(Hh)}mm" viewBox="0 0 ${fmt(W)} ${fmt(Hh)}">\n` +
+    `<title>${meta.title}</title>\n<desc>${meta.desc}</desc>\n` +
+    `<g id="cut-holes" fill="none" stroke="#e00000" stroke-width="0.05">\n${holes.join('\n')}\n</g>\n` +
+    `<g id="cut-outline" fill="none" stroke="#0000e0" stroke-width="0.05">\n${outer.join('\n')}\n</g>\n</svg>\n`;
+}
+// DXF R12, millimetres. Layer CUT_HOLES (red) and CUT_OUTLINE (blue); closed POLYLINEs and CIRCLEs.
+function dxfOf(p) {
+  const o = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '9', '$MEASUREMENT', '70', '1', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
+  const poly = (P, layer, col) => { o.push('0', 'POLYLINE', '8', layer, '62', col, '66', '1', '70', '1', '10', '0', '20', '0', '30', '0'); for (const q of P) o.push('0', 'VERTEX', '8', layer, '10', fmt(q[0]), '20', fmt(q[1]), '30', '0'); o.push('0', 'SEQEND', '8', layer); };
+  const circ = (c, layer, col) => o.push('0', 'CIRCLE', '8', layer, '62', col, '10', fmt(c.cx), '20', fmt(c.cy), '30', '0', '40', fmt(c.r));
+  for (const P of p.holes) poly(P, 'CUT_HOLES', '1');
+  for (const c of p.circles || []) circ(c, c.layer === 'holes' ? 'CUT_HOLES' : 'CUT_OUTLINE', c.layer === 'holes' ? '1' : '5');
+  if (p.outline) { const b = p.outline; poly([[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]], 'CUT_OUTLINE', '5'); }
+  o.push('0', 'ENDSEC', '0', 'EOF');
+  return o.join('\n') + '\n';
+}
+
 
 // ===== Tenebrae state: defaults, presets, effective patterns =====
 function mkCap(opt) {
@@ -1018,6 +1185,7 @@ function tableUplightState() {
     process: { profile: 'FDM', minWeb: 2, minHole: 3, clearance: 0.4, split: true, seam: 4, fillSmall: true, capsSeparate: false },
     room: { W: 4200, D: 3600, H: 2600, lampZ: 900, exposure: 1, ambient: 0.02 },
     res: 0.7,
+    export: { format: 'stl', omitCaps: false, shells: 'both', kerf: 0.15, strip: true, stripW: 10 },
   };
   fitOuter(s);
   return s;
@@ -1664,7 +1832,7 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
         if (sh.capBot.on) slider(b, 'Outer bottom bore radius (mm)', sh.capBot, 'bore', 0, 40, 0.5, 'geom');
         continue;
       }
-      slider(b, 'Wall (mm)', sh, 't', 1, 8, 0.1, 'geom');
+      slider(b, 'Wall (mm)', sh, 't', 0.2, 8, 0.05, 'geom');
       if (k === 1) { slider(b, 'Outer bottom, below the light (mm)', sh, 'zBot', -320, 0, 0.5, 'geom'); }
       slider(b, sh.capBot.on ? 'Corner band, wall to bottom cap (mm)' : 'Bottom rim (mm)', sh, 'rimBot', 1, 60, 0.5, 'geom');
       slider(b, sh.cap.on ? 'Corner band, wall to cap (mm)' : 'Top rim (mm)', sh, 'rimTop', 1, 60, 0.5, 'geom');
@@ -1742,11 +1910,8 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
   }
 
   function makeSection(b) {
-    select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF']], 'geom', true);
-    if (S.shells.some(sh => sh.shape === 'cylinder' && (sh.cap.on || sh.capBot.on))) {
-      check(b, 'Export caps as separate parts', S.process, 'capsSeparate', 'geom', true);
-      if (S.process.capsSeparate) note(b, 'Each capped cylinder exports as a wall tube plus flat cap discs, one wall thick, that sit on the tube ends. Tubes print upright and discs print flat, both without support. The outer shell no longer needs a seam split to assemble.');
-    }
+    select(b, 'Process', S.process, 'profile', [['FDM', 'FDM'], ['SLS', 'SLS / MJF'], ['Laser', 'Laser-cut sheet']], 'geom', true);
+    note(b, `Format, caps and which shells to export are in the Export menu: ${exportSummary()}.`);
     UI.makeNote = note(b, ''); makeHint();
     if (!ADV()) return;
     slider(b, 'Minimum web (mm)', S.process, 'minWeb', 0.6, 6, 0.1, 'geom');
@@ -1891,18 +2056,24 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
     beatHint(); sharpHint(); refreshSummaries();
     clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }, 600);
   }
+  const PROFILES = {
+    FDM: { minWeb: 2, minHole: 3, clearance: 0.4, split: true },
+    SLS: { minWeb: 1.5, minHole: 2, clearance: 0.5, split: false },
+    Laser: { minWeb: 1.2, minHole: 1, clearance: 0.5, split: false },
+  };
   function applyProfile() {
     if (UI.lastProfile) {
-      Object.assign(S.process, S.process.profile === 'SLS' ? { minWeb: 1.5, minHole: 2, clearance: 0.5, split: false } : { minWeb: 2, minHole: 3, clearance: 0.4, split: true });
+      Object.assign(S.process, PROFILES[S.process.profile] || PROFILES.FDM);
       renderSidebar();
     }
     UI.lastProfile = S.process.profile;
   }
   // Split at the light's plane: spheres when the process asks for it, and any outer shell capped at both
   // ends, because it could not otherwise close around the inner shell.
-  const sepCaps = (st, k) => st.process.capsSeparate && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
+  const capsApart = st => st.process.capsSeparate || (st.export && st.export.format === 'laser');
+  const sepCaps = (st, k) => capsApart(st) && st.shells[k].shape === 'cylinder' && (st.shells[k].cap.on || st.shells[k].capBot.on);
   const needsSplit = (st, k) => (st.shells[k].shape === 'sphere' && st.process.split) || (k === 1 && st.shells[1].cap.on && st.shells[1].capBot.on && !sepCaps(st, 1));
-  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: st.process.capsSeparate, fdm: st.process.profile === 'FDM' }; }
+  function optsFor(st, k, res, caps, capsB) { return { res, fillSmall: st.process.fillSmall, minWeb: st.process.minWeb, minHole: st.process.minHole, split: needsSplit(st, k), seam: st.process.seam, mirror: k === 1 && st.link.mirror, capPattern: caps[k], capFollow: capFollows(st, k), capBotPattern: capsB[k], capBotFollow: capFollowsBot(st, k), capsSeparate: capsApart(st), fdm: st.process.profile === 'FDM' }; }
   function opts(k, res, caps, capsB) { return optsFor(S, k, res, caps, capsB); }
   function build(draft) {
     const res = draft ? Math.min(2.5, S.res * 2) : S.res;
@@ -1994,7 +2165,8 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
     const n = $('#notes'); n.innerHTML = '';
     for (const x of notes) n.append(el('li', { class: x.bad ? 'bad' : x.ok ? 'ok' : 'warn' }, x.t));
     const blocked = !(G[0] && G[0].ok && G[1] && G[1].ok) || notes.some(x => x.bad && /overlap/.test(x.t));
-    $('#export').disabled = blocked;
+    UI.blocked = blocked ? (notes.find(x => x.bad) || {}).t || 'Fix the blocked shell first.' : '';
+    if (!$('#exportMenu').hidden) renderExportMenu();
   }
 
   // ---------- renderer / camera ----------
@@ -2063,6 +2235,7 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
     R.draw({ vp, lamp: [0, 0, S.room.lampZ], rot: [UI.animA * DEG, (S.motion.offset + UI.animB) * DEG], src: S.source,
       samples: UI.playing ? 16 : 8, frame: accN, power: 2.5e6, lightCol: LIGHT[S.source.color], ambient: S.room.ambient,
       exposure: S.room.exposure, jitter: jit, count: accN });
+    if (UI.shot) { const f = UI.shot; UI.shot = null; f(); }  // capture in the same frame as the draw
     accN++;
     const st = $('#refine');
     st.textContent = pt || !R.floatOK ? '' : accN < maxN ? `Refining soft shadows ${Math.round(100 * accN / maxN)}%` : '';
@@ -2099,15 +2272,124 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
       source: S.source,
     };
   }
+  // ---------- export menu ----------
+  const EX = () => S.export;
+  const shellSet = () => ({ both: [0, 1], inner: [0], outer: [1] })[EX().shells] || [0, 1];
+  const capsMode = () => EX().omitCaps ? 'omit' : capsApart(S) ? 'separate' : 'attached';
+  const anyCaps = () => shellSet().some(k => S.shells[k].cap.on || S.shells[k].capBot.on);
+  function exportSummary() {
+    const f = EX().format === 'laser' ? 'laser cut' : '3D print', c = { attached: 'caps attached', separate: 'caps separate', omit: 'caps left out' }[capsMode()];
+    return `${f}, ${EX().shells === 'both' ? 'both shells' : EX().shells + ' shell'}${anyCaps() ? ', ' + c : ''}`;
+  }
+  function exportChanged(geom) {
+    if (geom) build(false);
+    renderExportMenu(); renderSidebar();
+    clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }, 600);
+  }
+  function renderExportMenu() {
+    const m = $('#exportMenu'); m.innerHTML = ''; uid = uid || 0;
+    const laser = EX().format === 'laser', spheres = shellSet().filter(k => S.shells[k].shape === 'sphere');
+    const seg = (label, options, cur, pick) => {
+      const g = el('div', { class: 'seg', role: 'group', 'aria-label': label });
+      for (const [v, t, why] of options) g.append(el('button', { type: 'button', 'aria-pressed': cur === v ? 'true' : 'false', disabled: why ? '' : false, title: why || '', onclick: () => pick(v) }, t));
+      m.append(el('div', { class: 'row' }, el('span', {}, label), g));
+    };
+    m.append(el('h3', {}, 'Export'));
+    seg('Format', [['stl', '3D print (STL)'], ['laser', 'Laser cut (SVG, DXF)', spheres.length ? "Spheres can't be opened flat" : '']], EX().format, v => {
+      if (v === EX().format) return;
+      EX().format = v;
+      if (v === 'laser' && S.process.profile !== 'Laser') { S.process.profile = 'Laser'; Object.assign(S.process, PROFILES.Laser); UI.lastProfile = 'Laser'; toast('Process set to laser-cut sheet: 1.2 mm webs and 1 mm holes. Set the sheet thickness in this menu.'); }
+      if (v === 'stl' && S.process.profile === 'Laser') { S.process.profile = 'FDM'; Object.assign(S.process, PROFILES.FDM); UI.lastProfile = 'FDM'; toast('Process set back to FDM.'); }
+      exportChanged(true);
+    });
+    seg('Shells', [['both', 'Both'], ['inner', 'Inner'], ['outer', 'Outer']], EX().shells, v => { EX().shells = v; exportChanged(false); });
+    if (anyCaps()) seg('Caps', [['attached', 'Attached', laser ? 'Laser-cut caps are always separate discs' : ''], ['separate', 'Separate'], ['omit', 'Leave out']], capsMode(), v => {
+      S.process.capsSeparate = v !== 'attached'; EX().omitCaps = v === 'omit'; exportChanged(true);
+    });
+    if (laser) {
+      const box = el('div', { class: 'nums' });
+      const num2 = (label, get, set, min, max, step) => {
+        const id = 'x' + (uid++), inp = el('input', { type: 'number', id, min, max, step, value: get() });
+        inp.addEventListener('change', () => { const v = Math.min(max, Math.max(min, +inp.value)); if (isFinite(v)) set(v); });
+        box.append(el('label', { for: id }, label), inp);
+      };
+      num2('Sheet thickness (mm)', () => S.shells[0].t, v => { S.shells.forEach(sh => { sh.t = v; }); exportChanged(true); }, 0.2, 6, 0.05);
+      num2('Kerf (mm)', () => EX().kerf, v => { EX().kerf = v; exportChanged(false); }, 0, 0.6, 0.01);
+      const id = 'x' + (uid++), cb = el('input', { type: 'checkbox', id, checked: EX().strip ? '' : false });
+      cb.addEventListener('change', () => { EX().strip = cb.checked; exportChanged(false); });
+      box.append(el('div', { class: 'ctl chk' }, cb, el('label', { for: id }, 'Seam backing strip')));
+      if (EX().strip) num2('Strip width (mm)', () => EX().stripW, v => { EX().stripW = v; exportChanged(false); }, 4, 40, 1);
+      m.append(box);
+      // Rolling a sheet into the tube bends it to a surface strain of about t / 2R.
+      const strain = Math.max(...shellSet().map(k => S.shells[k].t / (2 * S.shells[k].R)));
+      if (strain > 0.015) m.append(el('p', { class: 'why' }, `A ${S.shells[0].t} mm sheet bends ${(strain * 100).toFixed(1)}% to roll at this radius; most sheet cracks or springs back above about 1.5%. Lampshade polypropylene or black card at 0.5–1 mm rolls cleanly.`));
+      note(m, 'Walls open into rectangles at mid-thickness and caps become discs that fit inside the tube ends. Kerf is compensated, and the backing strip carries matching holes so the seam stays invisible. SVGs print at 1:1 for a card test.');
+    } else {
+      note(m, capsMode() === 'attached' ? 'Each shell is one watertight part, split into halves where it has to be. CAD profiles and the Fusion proxy script come with it.'
+        : capsMode() === 'separate' ? 'Caps become flat discs that sit on the wall tube ends; tubes print upright and discs print flat. CAD profiles and the Fusion script come with it.'
+        : 'Only the wall tubes are exported, with flat joint rings at the capped ends.');
+    }
+    const act = el('div', { class: 'act' });
+    const why = UI.blocked || (laser && spheres.length ? "Spheres can't be laser cut flat. Export the cylinder shell only, or choose 3D print." : '');
+    act.append(el('button', { class: 'btn primary', type: 'button', id: 'doExport', disabled: why ? '' : false, onclick: () => { closeMenu(); exportPack(); } }, laser ? 'Export cut files' : 'Export print files'));
+    if (why) act.append(el('p', { class: 'why' }, why));
+    act.append(el('button', { class: 'btn', type: 'button', onclick: () => { closeMenu(); savePreview(); } }, 'Save preview image (PNG)'));
+    m.append(act);
+  }
+  function openMenu() { renderExportMenu(); $('#exportMenu').hidden = false; $('#export').setAttribute('aria-expanded', 'true'); const f = $('#exportMenu button[aria-pressed="true"]'); f && f.focus(); }
+  function closeMenu() { $('#exportMenu').hidden = true; $('#export').setAttribute('aria-expanded', 'false'); }
+  document.addEventListener('pointerdown', e => { if (!$('#exportMenu').hidden && !e.target.closest('.exp')) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#exportMenu').hidden) { closeMenu(); $('#export').focus(); } });
+
+  function savePreview() {
+    if (!R) { toast('The 3D preview is off in this browser.', true); return; }
+    const grab = () => canvas.toBlob(b => b ? save(`tenebrae-view-${new Date().toISOString().slice(0, 10)}.png`, b, 'preview image') : toast('Could not capture the preview.', true), 'image/png');
+    if (R.floatOK) { R.present(Math.max(1, accN), S.room.exposure); grab(); } else { UI.shot = grab; dirty(); }
+  }
+
+  async function exportLaser(btn) {
+    const files = [], report = [`Tenebrae cut files, ${new Date().toISOString()}`, `Sheet ${S.shells[0].t} mm, kerf ${EX().kerf} mm, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`,
+      'Red = holes (cut first), blue = outlines (cut last). Everything is drawn as seen from outside the lamp.', ''];
+    let total = 0;
+    for (const k of shellSet()) {
+      const g = G[k], who = k ? 'outer' : 'inner';
+      btn.textContent = `Tracing ${who} shell…`; await new Promise(r => setTimeout(r, 0));
+      const F = flatParts(g, { kerf: EX().kerf, strip: EX().strip, stripW: EX().stripW });
+      if (F.error) { report.push(`${who}: ${F.error}`); continue; }
+      for (const p of F.parts) {
+        if (EX().omitCaps && p.kind === 'disc') continue;
+        const name = `${who}-${p.name}`, meta = { title: `Tenebrae ${name}`, desc: `${p.note} Sheet ${F.thickness} mm, kerf ${F.kerf} mm.` };
+        files.push({ name: name + '.svg', data: new TextEncoder().encode(svgOf(p, meta)) });
+        files.push({ name: name + '.dxf', data: new TextEncoder().encode(dxfOf(p)) });
+        total += p.cutLength;
+        report.push(`${name}: ${p.w.toFixed(1)} x ${p.h.toFixed(1)} mm, ${p.holes.length} cut-outs, ${(p.cutLength / 1000).toFixed(2)} m of cut. ${p.note}`);
+      }
+    }
+    report.push('', `Total cut length ${(total / 1000).toFixed(2)} m.`, 'Assembly: roll each wall with the drawn face outwards, glue the backing strip inside the seam, then press the cap discs into the tube ends.');
+    for (const n of notes) report.push((n.bad ? 'ERROR ' : 'NOTE ') + n.t);
+    return { files, report, zipName: `tenebrae-cut-${new Date().toISOString().slice(0, 10)}.zip`, label: 'cut files', ok: true };
+  }
+
   async function exportPack() {
-    const btn = $('#export'); btn.disabled = true; const old = btn.textContent; btn.textContent = 'Building meshes…';
+    const btn = $('#export'); btn.disabled = true; const old = btn.innerHTML; btn.textContent = 'Building…';
     await new Promise(r => setTimeout(r, 30));
     try {
       clearTimeout(fullT); clearTimeout(buildT); build(false);
       if (!(G[0].ok && G[1].ok)) { toast('Fix the blocked shell before exporting.', true); return; }
+      if (EX().format === 'laser') {
+        const L = await exportLaser(btn), enc0 = new TextEncoder();
+        L.files.push({ name: 'design.json', data: enc0.encode(JSON.stringify(S, null, 2)) });
+        L.files.push({ name: 'interface.json', data: enc0.encode(JSON.stringify(interfaceSpec(clearanceGap(G[0], G[1])), null, 2)) });
+        L.files.push({ name: 'checks.txt', data: enc0.encode(L.report.join('\n') + '\n') });
+        btn.textContent = 'Packing…'; await new Promise(r => setTimeout(r, 0));
+        await save(L.zipName, new Blob(zipStore(L.files), { type: 'application/zip' }), L.label);
+        return;
+      }
+      const keep = (k, part) => shellSet().includes(k) && !(EX().omitCaps && /cap$/.test(part.suffix || ''));
       const files = [], report = [`Tenebrae export, ${new Date().toISOString()}`, `Grid ${S.res} mm, process ${S.process.profile}, min web ${S.process.minWeb} mm, min hole ${S.process.minHole} mm`, ''];
       let allOK = true;
       for (const k of [0, 1]) for (const part of G[k].parts) {
+        if (!keep(k, part)) continue;
         const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}.stl`;
         btn.textContent = `Meshing ${name}…`; await new Promise(r => setTimeout(r, 0));
         const m = buildMesh(G[k], part), c = checkMesh(m, part.holes, part.ends);
@@ -2123,6 +2405,7 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
       // CAD profiles: one revolved outline per printed part, plus the Fusion script that turns them into bodies
       const profParts = [];
       for (const k of [0, 1]) for (const part of G[k].parts) {
+        if (!keep(k, part)) continue;
         const name = `${k ? 'outer' : 'inner'}-shell${part.suffix ? '-' + part.suffix : ''}`, segments = shellProfile(G[k], part);
         if (!profileClosed(segments)) { allOK = false; report.push(`${name} profile: CHECK FAILED (outline not closed)`); }
         profParts.push({ name, stl: name + '.stl', volume: +profileVolume(segments).toFixed(3), segments });
@@ -2137,7 +2420,7 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
       if (!allOK) toast('A mesh check failed; see checks.txt in the zip.', true);
       await save(`tenebrae-${new Date().toISOString().slice(0, 10)}.zip`, blob, 'print files');
     } catch (e) { console.error(e); toast('Export failed: ' + e.message, true); }
-    finally { btn.textContent = old; renderChecks(); }
+    finally { btn.innerHTML = old; btn.disabled = false; renderChecks(); }
   }
 
   // ---------- header wiring ----------
@@ -2153,7 +2436,7 @@ const FUSION_PY = "# Tenebrae proxies for Fusion.\n# Reads profile.json from a T
     renderSidebar(); build(false); changed('motion'); ps.blur();
   });
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
-  $('#export').addEventListener('click', exportPack);
+  $('#export').addEventListener('click', () => { if ($('#exportMenu').hidden) openMenu(); else closeMenu(); });
   $('#savejson').addEventListener('click', () => save('tenebrae-design.json', JSON.stringify(S, null, 2), 'design'));
   $('#loadjson').addEventListener('click', () => $('#file').click());
   $('#file').addEventListener('change', e => {

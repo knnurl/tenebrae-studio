@@ -3,7 +3,7 @@
 const fs = require('fs'), os = require('os'), path = require('path');
 const root = path.join(__dirname, '..'), strip = f => fs.readFileSync(path.join(root, 'src', f), 'utf8').replace(/\nif \(typeof module[\s\S]*$/, '\n');
 const bundlePath = path.join(os.tmpdir(), 'tenebrae-bundle.js');
-fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
+fs.writeFileSync(bundlePath, strip('core.js') + strip('state.js') + 'module.exports={fieldContours,flatParts,svgOf,dxfOf,polyArea,shellProfile,profileVolume,profileClosed,effectiveCapsBot,capFollowsBot,mkCap,tableUplightState,GENS,buildShell,buildMesh,checkMesh,stlBinary,zipStore,crc32,clearanceGap,sourceInside,beatInfo,twistPeriods,PRESETS,effectivePatterns,effectiveCaps,capFollows,loadDesign,defaultState,helixState,fitOuter,fibPoints,wrapPi,TAU};');
 const X = require(bundlePath);
 let fails = 0;
 const check = (name, cond, info='') => { console.log((cond?'PASS ':'FAIL ')+name+(info?'  '+info:'')); if(!cond) fails++; };
@@ -261,6 +261,52 @@ for (const pr of X.PRESETS) {
   const exact2 = slab(63, -40, 40) - slab(60, -40, 40);
   const v2 = X.profileVolume(X.shellProfile(G2, G2.parts[0]));
   check('profile volume is exact for an open sphere band', Math.abs(v2-exact2)/exact2 < 1e-7, `${v2.toFixed(3)} vs ${exact2.toFixed(3)}`);
+}
+// Flat cutting: opened walls and cap discs match the field they come from
+{
+  const d = X.defaultState(); d.shells.forEach(s => { s.t = 0.8; }); X.fitOuter(d);
+  const pa = X.effectivePatterns(d), ca = X.effectiveCaps(d), cb = X.effectiveCapsBot(d);
+  const o = k => ({res:d.res,fillSmall:true,minWeb:1.2,minHole:1,split:false,seam:4,mirror:k===1&&d.link.mirror,capPattern:ca[k],capFollow:X.capFollows(d,k),capBotPattern:cb[k],capBotFollow:X.capFollowsBot(d,k),capsSeparate:true});
+  for (const k of [0, 1]) {
+    const G = X.buildShell(d.shells[k], pa[k], o(k)), who = k ? 'outer' : 'inner';
+    if (!G.ok) { check(`flat ${who}: builds`, false, G.errors.join('; ')); continue; }
+    const F0 = X.flatParts(G, { kerf: 0, strip: true, stripW: 10 }), F = X.flatParts(G, { kerf: 0.2, strip: true, stripW: 10 });
+    const P = n => F0.parts.find(p => p.name === n), Rm = G.R + G.t / 2, Ro = G.Ro;
+    const wall = P('wall');
+    check(`flat ${who}: wall is circumference x height at mid-thickness`, Math.abs(wall.w - 2 * Math.PI * Rm) < 1e-9 && Math.abs(wall.h - (G.zTop - G.zBot)) < 1e-9, `${wall.w.toFixed(3)} x ${wall.h.toFixed(2)}`);
+    // expected open area of the wall: field < 0 in the wall zone, mapped to the mid-surface (y = Rm s / Ro)
+    let want = 0, wantT = 0; const zc = G.zTop - G.t / 2;
+    for (let j = 0; j < G.Nb - 1; j++) {
+      const s = G.bandS[j], ds = G.bandS[j + 1] - s; let open = 0;
+      for (let i = 0; i < G.Nc; i++) open += (G.field[j * G.Nc + i] + G.field[(j + 1) * G.Nc + i]) < 0 ? 1 : 0;
+      if (s >= G.sWallLo && s < G.sWallHi) want += open / G.Nc * 2 * Math.PI * Rm * (Rm / Ro) * ds;
+      if (s >= G.sCapLo) { const r0 = zc / Math.tan(G.psiOfS(s)), r1 = zc / Math.tan(G.psiOfS(G.bandS[j + 1])); wantT += open / G.Nc * Math.PI * Math.abs(r0 * r0 - r1 * r1); }
+    }
+    const got = wall.holes.reduce((n, h) => n + Math.abs(X.polyArea(h)), 0);
+    check(`flat ${who}: wall hole area matches the field's open area`, Math.abs(got - want) / want < 0.02, `${got.toFixed(0)} vs ${want.toFixed(0)} mm2 (${((got - want) / want * 100).toFixed(2)}%)`);
+    const cap = P('top-cap'), gotT = cap.holes.reduce((n, h) => n + Math.abs(X.polyArea(h)), 0);
+    check(`flat ${who}: top-cap hole area matches the field's open area`, Math.abs(gotT - wantT) / wantT < 0.03, `${gotT.toFixed(0)} vs ${wantT.toFixed(0)} mm2`);
+    // kerf: each hole shrinks by about perimeter x kerf/2
+    const wallK = F.parts.find(p => p.name === 'wall'), aK = wallK.holes.reduce((n, h) => n + Math.abs(X.polyArea(h)), 0);
+    const per = wall.holes.reduce((n, h) => { let l = 0; for (let i = 0; i < h.length; i++) { const a = h[i], b = h[(i + 1) % h.length]; if (!(a[0] <= 1e-9 && b[0] <= 1e-9) && !(a[0] >= wall.w - 1e-9 && b[0] >= wall.w - 1e-9)) l += Math.hypot(b[0] - a[0], b[1] - a[1]); } return n + l; }, 0);
+    check(`flat ${who}: kerf shrinks holes by perimeter x kerf/2`, Math.abs((got - aK) - per * 0.1) / (per * 0.1) < 0.15, `lost ${(got - aK).toFixed(0)} mm2, expected ~${(per * 0.1).toFixed(0)}`);
+    const strip = P('seam-strip'), sA = strip.holes.reduce((n, h) => n + Math.abs(X.polyArea(h)), 0);
+    check(`flat ${who}: seam strip has holes inside its outline`, strip.holes.length > 0 && sA < strip.w * strip.h && strip.holes.every(h => h.every(q => q[0] >= -1e-6 && q[0] <= strip.w + 1e-6)), `${strip.holes.length} cut-outs, ${sA.toFixed(0)} mm2`);
+    let fin = true; for (const p of F.parts) for (const h of p.holes) for (const q of h) if (!isFinite(q[0]) || !isFinite(q[1])) fin = false;
+    check(`flat ${who}: every cut path is finite and closed`, fin && F.parts.every(p => p.holes.every(h => h.length >= 3)));
+    let agree = true; const info = [];
+    for (const p of F.parts) {
+      const svg = X.svgOf(p, { title: p.name, desc: '' }), dxf = X.dxfOf(p);
+      const paths = (svg.match(/<path /g) || []).length, svgC = (svg.match(/<circle /g) || []).length, rects = (svg.match(/<rect /g) || []).length;
+      const polys = (dxf.match(/\nPOLYLINE\n/g) || []).length, seqs = (dxf.match(/\nSEQEND\n/g) || []).length, circs = (dxf.match(/\nCIRCLE\n/g) || []).length;
+      const ok = paths === p.holes.length && polys === p.holes.length + rects && seqs === polys && circs === svgC && /<\/svg>\s*$/.test(svg) && /EOF\n$/.test(dxf);
+      agree = agree && ok; info.push(`${p.name}: ${paths} paths/${polys} polylines`);
+    }
+    check(`flat ${who}: SVG and DXF carry the same cut paths`, agree, info.join(', '));
+  }
+  const sp = { shape:'sphere', R:60, t:1, zBot:-40, zTop:40, rimBot:6, rimTop:6, cap: X.mkCap(), capBot: X.mkCap() };
+  const GS = X.buildShell(sp, {gen:'slots',invert:false,phase:0,params:{N:20,twist:0,wobA:0,wobK:0,duty:0.4}}, {res:1,minWeb:1.2,minHole:1,split:false,seam:4});
+  check('flat: spheres are refused', !!X.flatParts(GS, {}).error);
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 process.exit(fails ? 1 : 0);

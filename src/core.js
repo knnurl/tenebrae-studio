@@ -261,7 +261,8 @@ function buildShell(sh, pat, opts) {
   const sph = sh.shape === 'sphere';
   const R = sh.R, t = sh.t, Ro = R + t, res = opts.res;
   let zBot = sh.zBot, zTop = sh.zTop;
-  if (t < 1) errors.push('Wall thickness must be at least 1 mm.');
+  if (t < 0.2) errors.push('Wall thickness must be at least 0.2 mm.');
+  if (t < 1 && opts.fdm) warnings.push('Walls under 1 mm do not print reliably on FDM; thin sheet suits laser cutting.');
   if (sph) {
     const lim = 0.95 * R;
     if (zBot < -lim || zTop > lim) warnings.push(`Sphere openings clamped to ±${lim.toFixed(0)} mm (95% of radius).`);
@@ -836,4 +837,153 @@ function profileClosed(segs) {
   return segs.length >= 3;
 }
 
-if (typeof module !== 'undefined') module.exports = { shellProfile, profileVolume, profileClosed, twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };
+// ---------- Flat cutting (laser, CNC, paper): opened-up cylinder walls and cap discs ----------
+// Closed contours of the field at level `lev` (mm, hole side is field < lev), from the same marching-squares
+// walk as the mesher (solid side on the left, saddles solid-connected). Points are grid coordinates [i, j],
+// with i unwrapped across the seam so a loop that crosses it stays continuous.
+function fieldContours(G, lev) {
+  const { Nb, Nc, field } = G, val = (i, j) => field[j * Nc + i] - lev;
+  const next = new Map(), pts = new Map();
+  const pt = (id, x, y) => { if (!pts.has(id)) pts.set(id, [x, y]); return id; };
+  for (let j = 0; j < Nb - 1; j++) for (let i = 0; i < Nc; i++) {
+    const i1 = (i + 1) % Nc, v0 = val(i, j), v1 = val(i1, j), v2 = val(i1, j + 1), v3 = val(i, j + 1);
+    const s0 = v0 >= 0, s1 = v1 >= 0, s2 = v2 >= 0, s3 = v3 >= 0;
+    if (s0 === s1 && s1 === s2 && s2 === s3) continue;
+    const P = [];
+    if (s0) P.push(null);
+    if (s0 !== s1) P.push(pt(2 * (j * Nc + i), i + v0 / (v0 - v1), j));
+    if (s1) P.push(null);
+    if (s1 !== s2) P.push(pt(2 * (j * Nc + i1) + 1, i + 1, j + v1 / (v1 - v2)));
+    if (s2) P.push(null);
+    if (s2 !== s3) P.push(pt(2 * ((j + 1) * Nc + i), i + v3 / (v3 - v2), j + 1));
+    if (s3) P.push(null);
+    if (s3 !== s0) P.push(pt(2 * (j * Nc + i) + 1, i, j + v0 / (v0 - v3)));
+    for (let k = 0; k < P.length; k++) { const a = P[k], b = P[(k + 1) % P.length]; if (a !== null && b !== null) next.set(a, b); }
+  }
+  const loops = [], seen = new Set();
+  for (const start of next.keys()) {
+    if (seen.has(start)) continue;
+    const raw = []; let id = start;
+    while (id !== undefined && !seen.has(id)) { seen.add(id); raw.push(pts.get(id)); id = next.get(id); }
+    if (id !== start || raw.length < 3) continue;
+    const out = [raw[0].slice()];
+    for (let k = 1; k < raw.length; k++) { let x = raw[k][0]; const px = out[k - 1][0]; while (x - px > Nc / 2) x -= Nc; while (x - px < -Nc / 2) x += Nc; out.push([x, raw[k][1]]); }
+    loops.push(out);
+  }
+  return loops;
+}
+const polyArea = P => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+const polyLen = P => { let l = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; l += Math.hypot(q[0] - p[0], q[1] - p[1]); } return l; };
+// Sutherland-Hodgman clip of a polygon to an axis-aligned rectangle.
+function clipRect(P, x0, y0, x1, y1) {
+  const sides = [[p => p[0] >= x0, (a, b) => [x0, a[1] + (b[1] - a[1]) * (x0 - a[0]) / (b[0] - a[0])]],
+                 [p => p[0] <= x1, (a, b) => [x1, a[1] + (b[1] - a[1]) * (x1 - a[0]) / (b[0] - a[0])]],
+                 [p => p[1] >= y0, (a, b) => [a[0] + (b[0] - a[0]) * (y0 - a[1]) / (b[1] - a[1]), y0]],
+                 [p => p[1] <= y1, (a, b) => [a[0] + (b[0] - a[0]) * (y1 - a[1]) / (b[1] - a[1]), y1]]];
+  let out = P;
+  for (const [inside, cut] of sides) {
+    const inp = out; out = [];
+    for (let i = 0; i < inp.length; i++) {
+      const a = inp[(i + inp.length - 1) % inp.length], b = inp[i];
+      if (inside(b)) { if (!inside(a)) out.push(cut(a, b)); out.push(b); } else if (inside(a)) out.push(cut(a, b));
+    }
+    if (!out.length) return out;
+  }
+  return out;
+}
+// Ramer-Douglas-Peucker on a closed loop (keeps cut files small without moving any edge by more than tol).
+function simplifyLoop(P, tol) {
+  if (P.length < 8) return P;
+  let far = 0, fd = -1;
+  for (let i = 1; i < P.length; i++) { const d = Math.hypot(P[i][0] - P[0][0], P[i][1] - P[0][1]); if (d > fd) { fd = d; far = i; } }
+  const keep = new Uint8Array(P.length); keep[0] = keep[far] = 1;
+  const rdp = (a, b) => { // indices a < b, chain P[a..b]
+    let idx = -1, dmax = tol;
+    const [ax, ay] = P[a], [bx, by] = P[b % P.length], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1e-12;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L; if (d > dmax) { dmax = d; idx = i; } }
+    if (idx >= 0) { keep[idx] = 1; rdp(a, idx); rdp(idx, b); }
+  };
+  rdp(0, far); rdp(far, P.length);
+  return P.filter((_, i) => keep[i]);
+}
+// Flat parts for one cylinder shell, in millimetres, each drawn as seen from outside the lamp.
+// wall: the wall opened at phi = 0 into a rectangle, mapped at mid-thickness (x = arc length, y = height
+// above the bottom end). strip: optional backing strip glued inside the seam; it sits one sheet further in,
+// so its holes are mapped at that smaller radius and line up with the wall's along every ray.
+// top-cap / bottom-cap: discs that fit inside the tube ends, holes mapped at the disc's mid-plane.
+// Holes are traced at field = -kerf/2 and outlines grown by kerf/2, so parts come out at true size.
+function flatParts(G, o) {
+  if (G.sph) return { error: "Spheres can't be opened flat; use a cylinder for laser cutting." };
+  const kerf = Math.max(0, o.kerf || 0), k = kerf / 2, tol = o.tol || 0.02;
+  const { R, t, zBot, zTop, Nc, Nb, bandS } = G, Rm = R + t / 2, H = zTop - zBot, L = TAU * Rm;
+  const sAt = y => { const j = Math.min(Nb - 2, Math.max(0, Math.floor(y))), f = y - j; return bandS[j] + f * (bandS[j + 1] - bandS[j]); };
+  const loops = fieldContours(G, -k).map(L0 => L0.map(([x, y]) => [x * TAU / Nc, sAt(y)]));
+  const zoneOf = P => { let s = 0; for (const p of P) s += p[1]; s /= P.length; return s >= G.sCapLo ? 'top' : s <= G.sCapBHi ? 'bottom' : 'wall'; };
+  const wall = loops.filter(P => zoneOf(P) === 'wall');
+  const tanPsi = s => Math.tan(G.psiOfS(s));
+  const sheet = (Rr, z0, w, h, xShift) => {
+    const holes = [];
+    for (const P of wall) for (const off of [-TAU, 0, TAU]) {
+      const Q = P.map(([phi, s]) => [Rr * (phi + off) + xShift, Rr * tanPsi(s) - z0]);
+      let mn = Infinity, mx = -Infinity; for (const q of Q) { if (q[0] < mn) mn = q[0]; if (q[0] > mx) mx = q[0]; }
+      if (mx < -k || mn > w + k) continue;
+      const C = clipRect(Q, -k, -k, w + k, h + k);
+      if (C.length >= 3 && Math.abs(polyArea(C)) > 1e-4) holes.push(simplifyLoop(C, tol));
+    }
+    return holes;
+  };
+  const parts = [];
+  const rect = (w, h) => ({ type: 'rect', x0: -k, y0: -k, x1: w + k, y1: h + k });
+  parts.push({ name: 'wall', kind: 'sheet', w: L, h: H, outline: rect(L, H), holes: sheet(Rm, zBot, L, H, 0),
+    note: `Opened at the seam (phi = 0). Rolls into a tube of ${(2 * R).toFixed(2)} mm inside diameter, ${H.toFixed(2)} mm tall, seen from outside.` });
+  if (o.strip) {
+    const Rs = Rm - t, zLo = zBot + (G.capB ? t : 0), zHi = zTop - (G.cap ? t : 0), w = Math.max(2, o.stripW || 10);
+    parts.push({ name: 'seam-strip', kind: 'sheet', w, h: zHi - zLo, outline: rect(w, zHi - zLo), holes: sheet(Rs, zLo, w, zHi - zLo, w / 2),
+      note: `Glue inside the seam, centred on it, from ${zLo.toFixed(2)} to ${zHi.toFixed(2)} mm. Its holes line up with the wall's.` });
+  }
+  for (const [end, on, zc, bore, flipY] of [['top', G.cap, zTop - t / 2, G.boreT, 1], ['bottom', G.capB, zBot + t / 2, G.boreB, -1]]) {
+    if (!on) continue;
+    const holes = loops.filter(P => zoneOf(P) === end).map(P => simplifyLoop(P.map(([phi, s]) => { const r = zc / tanPsi(s); return [r * Math.cos(phi), flipY * r * Math.sin(phi)]; }), tol));
+    const circles = [{ cx: 0, cy: 0, r: R + k, layer: 'outline' }];
+    if (bore > 0) circles.push({ cx: 0, cy: 0, r: Math.max(0.1, bore - k), layer: 'holes' });
+    parts.push({ name: `${end}-cap`, kind: 'disc', w: 2 * R, h: 2 * R, circles, holes,
+      note: `Disc ${(2 * R).toFixed(2)} mm across, fits inside the tube's ${end} end, seen from ${end === 'top' ? 'above' : 'below'}.` });
+  }
+  for (const p of parts) {
+    let cut = p.holes.reduce((n, P) => n + polyLen(P), 0), open = p.holes.reduce((n, P) => n + Math.abs(polyArea(P)), 0);
+    if (p.outline) cut += 2 * (p.outline.x1 - p.outline.x0 + p.outline.y1 - p.outline.y0);
+    for (const c of p.circles || []) { cut += TAU * c.r; if (c.layer === 'holes') open += Math.PI * c.r * c.r; }
+    p.cutLength = cut; p.openArea = open;
+  }
+  return { parts, kerf, thickness: t, midRadius: Rm };
+}
+const fmt = v => (Math.round(v * 1000) / 1000).toString();
+function partBounds(p) {
+  if (p.outline) return [p.outline.x0, p.outline.y0, p.outline.x1, p.outline.y1];
+  const r = Math.max(...p.circles.map(c => c.r)); return [-r, -r, r, r];
+}
+// SVG in millimetres. Red = holes (cut first), blue = outline (cut last); hairline strokes, no fill.
+function svgOf(p, meta) {
+  const [x0, y0, x1, y1] = partBounds(p), pad = 2, X = x => fmt(x - x0 + pad), Y = y => fmt(y1 - y + pad);
+  const W = x1 - x0 + 2 * pad, Hh = y1 - y0 + 2 * pad, path = P => 'M' + P.map(q => X(q[0]) + ' ' + Y(q[1])).join('L') + 'Z';
+  const holes = p.holes.map(P => `<path d="${path(P)}"/>`).concat((p.circles || []).filter(c => c.layer === 'holes').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`));
+  const outer = p.outline ? [`<rect x="${X(p.outline.x0)}" y="${Y(p.outline.y1)}" width="${fmt(p.outline.x1 - p.outline.x0)}" height="${fmt(p.outline.y1 - p.outline.y0)}"/>`]
+    : p.circles.filter(c => c.layer === 'outline').map(c => `<circle cx="${X(c.cx)}" cy="${Y(c.cy)}" r="${fmt(c.r)}"/>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(W)}mm" height="${fmt(Hh)}mm" viewBox="0 0 ${fmt(W)} ${fmt(Hh)}">\n` +
+    `<title>${meta.title}</title>\n<desc>${meta.desc}</desc>\n` +
+    `<g id="cut-holes" fill="none" stroke="#e00000" stroke-width="0.05">\n${holes.join('\n')}\n</g>\n` +
+    `<g id="cut-outline" fill="none" stroke="#0000e0" stroke-width="0.05">\n${outer.join('\n')}\n</g>\n</svg>\n`;
+}
+// DXF R12, millimetres. Layer CUT_HOLES (red) and CUT_OUTLINE (blue); closed POLYLINEs and CIRCLEs.
+function dxfOf(p) {
+  const o = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '9', '$MEASUREMENT', '70', '1', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
+  const poly = (P, layer, col) => { o.push('0', 'POLYLINE', '8', layer, '62', col, '66', '1', '70', '1', '10', '0', '20', '0', '30', '0'); for (const q of P) o.push('0', 'VERTEX', '8', layer, '10', fmt(q[0]), '20', fmt(q[1]), '30', '0'); o.push('0', 'SEQEND', '8', layer); };
+  const circ = (c, layer, col) => o.push('0', 'CIRCLE', '8', layer, '62', col, '10', fmt(c.cx), '20', fmt(c.cy), '30', '0', '40', fmt(c.r));
+  for (const P of p.holes) poly(P, 'CUT_HOLES', '1');
+  for (const c of p.circles || []) circ(c, c.layer === 'holes' ? 'CUT_HOLES' : 'CUT_OUTLINE', c.layer === 'holes' ? '1' : '5');
+  if (p.outline) { const b = p.outline; poly([[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]], 'CUT_OUTLINE', '5'); }
+  o.push('0', 'ENDSEC', '0', 'EOF');
+  return o.join('\n') + '\n';
+}
+
+if (typeof module !== 'undefined') module.exports = { fieldContours, flatParts, svgOf, dxfOf, polyArea, clipRect, simplifyLoop, shellProfile, profileVolume, profileClosed, twistPeriods, GENS, genDefaults, buildShell, buildMesh, checkMesh, stlBinary, zipStore, crc32, clearanceGap, sourceInside, beatInfo, labelComponents, FORCE, TAU, DEG };
