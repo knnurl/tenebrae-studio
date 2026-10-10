@@ -69,7 +69,7 @@ The design still has the 3 mm wall from the laser sheet. For FDM, 2 mm is enough
 - Supports **off**.
 
 ### Route B (H2D)
-Start from `~/Downloads/PETG-interface.3mf`. It was saved for an X1E, so change these:
+Start from [`PETG-interface.3mf`](PETG-interface.3mf) in this folder (also in `~/Downloads`). It is a settings-only Bambu Studio project, with no model, saved for an X1E, so change these:
 - [ ] **Printer profile:** Bambu Lab H2D, 0.4 nozzle.
 - [ ] **Filaments:** PLA (black) is filament 1, PETG is filament 2. Map them to **different nozzles** so swaps are nozzle switches, not purges.
 - [ ] **Support threshold angle:** from **30° to 50°**. At 30° the slicer generates nothing, because the slot ceilings lean 34–40°.
