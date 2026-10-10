@@ -1,0 +1,384 @@
+{
+  "v": 1,
+  "lamp": {
+    "mount": "pendant"
+  },
+  "plan": {
+    "target": "everywhere"
+  },
+  "fit": {
+    "auto": true,
+    "gap": 23
+  },
+  "source": {
+    "type": "line",
+    "size": 1.4,
+    "length": 8,
+    "z": 10,
+    "emit": "omni",
+    "color": "warm"
+  },
+  "shells": [
+    {
+      "shape": "cylinder",
+      "R": 50,
+      "t": 3,
+      "zBot": -82.5,
+      "zTop": 119.5,
+      "rimBot": 6,
+      "rimTop": 6,
+      "pattern": {
+        "gen": "slots",
+        "invert": false,
+        "phase": 0,
+        "params": {
+          "slots": {
+            "N": 31,
+            "twist": 1.47,
+            "wobA": 0,
+            "wobK": 1.5,
+            "duty": 0.62
+          },
+          "rings": {
+            "pitch": 6,
+            "K": 6,
+            "amp": 1.5,
+            "duty": 0.4,
+            "bridges": 12,
+            "bridgeW": 3
+          },
+          "phyllo": {
+            "N": 420,
+            "size": 0.55,
+            "grad": 0
+          },
+          "voronoi": {
+            "N": 240,
+            "web": 3,
+            "jitter": 0.6,
+            "seed": 7
+          },
+          "superformula": {
+            "N": 18,
+            "rows": 7,
+            "m": 5,
+            "n1": 0.8,
+            "n2": 1.2,
+            "n3": 1.2,
+            "size": 0.82,
+            "grad": 0,
+            "spin": 0,
+            "stagger": true
+          }
+        }
+      },
+      "cap": {
+        "on": true,
+        "follow": true,
+        "hub": 24,
+        "bore": 6,
+        "pattern": {
+          "gen": "slots",
+          "invert": false,
+          "phase": 0,
+          "params": {
+            "slots": {
+              "N": 18,
+              "twist": 2,
+              "wobA": 0,
+              "wobK": 2,
+              "duty": 0.38
+            },
+            "rings": {
+              "pitch": 6,
+              "K": 6,
+              "amp": 1.5,
+              "duty": 0.4,
+              "bridges": 12,
+              "bridgeW": 3
+            },
+            "phyllo": {
+              "N": 420,
+              "size": 0.55,
+              "grad": 0
+            },
+            "voronoi": {
+              "N": 240,
+              "web": 3,
+              "jitter": 0.6,
+              "seed": 7
+            },
+            "superformula": {
+              "N": 18,
+              "rows": 7,
+              "m": 5,
+              "n1": 0.8,
+              "n2": 1.2,
+              "n3": 1.2,
+              "size": 0.82,
+              "grad": 0,
+              "spin": 0,
+              "stagger": true
+            }
+          }
+        }
+      },
+      "capBot": {
+        "on": false,
+        "follow": true,
+        "hub": 24,
+        "bore": 0,
+        "pattern": {
+          "gen": "slots",
+          "invert": false,
+          "phase": 0,
+          "params": {
+            "slots": {
+              "N": 18,
+              "twist": 2,
+              "wobA": 0,
+              "wobK": 2,
+              "duty": 0.38
+            },
+            "rings": {
+              "pitch": 6,
+              "K": 6,
+              "amp": 1.5,
+              "duty": 0.4,
+              "bridges": 12,
+              "bridgeW": 3
+            },
+            "phyllo": {
+              "N": 420,
+              "size": 0.55,
+              "grad": 0
+            },
+            "voronoi": {
+              "N": 240,
+              "web": 3,
+              "jitter": 0.6,
+              "seed": 7
+            },
+            "superformula": {
+              "N": 18,
+              "rows": 7,
+              "m": 5,
+              "n1": 0.8,
+              "n2": 1.2,
+              "n3": 1.2,
+              "size": 0.82,
+              "grad": 0,
+              "spin": 0,
+              "stagger": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "shape": "cylinder",
+      "R": 76,
+      "t": 3,
+      "zBot": -105.5,
+      "zTop": 145.5,
+      "rimBot": 29,
+      "rimTop": 6,
+      "pattern": {
+        "gen": "slots",
+        "invert": false,
+        "phase": 0,
+        "params": {
+          "slots": {
+            "N": 30,
+            "twist": 1.2,
+            "wobA": 0,
+            "wobK": 2,
+            "duty": 0.45
+          },
+          "rings": {
+            "pitch": 6,
+            "K": 6,
+            "amp": 1.5,
+            "duty": 0.4,
+            "bridges": 12,
+            "bridgeW": 3
+          },
+          "phyllo": {
+            "N": 420,
+            "size": 0.55,
+            "grad": 0
+          },
+          "voronoi": {
+            "N": 240,
+            "web": 3,
+            "jitter": 0.6,
+            "seed": 7
+          },
+          "superformula": {
+            "N": 18,
+            "rows": 7,
+            "m": 5,
+            "n1": 0.8,
+            "n2": 1.2,
+            "n3": 1.2,
+            "size": 0.82,
+            "grad": 0,
+            "spin": 0,
+            "stagger": true
+          }
+        }
+      },
+      "cap": {
+        "on": true,
+        "follow": true,
+        "hub": 24,
+        "bore": 4.5,
+        "pattern": {
+          "gen": "slots",
+          "invert": false,
+          "phase": 0,
+          "params": {
+            "slots": {
+              "N": 18,
+              "twist": 2,
+              "wobA": 0,
+              "wobK": 2,
+              "duty": 0.38
+            },
+            "rings": {
+              "pitch": 6,
+              "K": 6,
+              "amp": 1.5,
+              "duty": 0.4,
+              "bridges": 12,
+              "bridgeW": 3
+            },
+            "phyllo": {
+              "N": 420,
+              "size": 0.55,
+              "grad": 0
+            },
+            "voronoi": {
+              "N": 240,
+              "web": 3,
+              "jitter": 0.6,
+              "seed": 7
+            },
+            "superformula": {
+              "N": 18,
+              "rows": 7,
+              "m": 5,
+              "n1": 0.8,
+              "n2": 1.2,
+              "n3": 1.2,
+              "size": 0.82,
+              "grad": 0,
+              "spin": 0,
+              "stagger": true
+            }
+          }
+        }
+      },
+      "capBot": {
+        "on": false,
+        "follow": true,
+        "hub": 24,
+        "bore": 0,
+        "pattern": {
+          "gen": "slots",
+          "invert": false,
+          "phase": 0,
+          "params": {
+            "slots": {
+              "N": 18,
+              "twist": 2,
+              "wobA": 0,
+              "wobK": 2,
+              "duty": 0.38
+            },
+            "rings": {
+              "pitch": 6,
+              "K": 6,
+              "amp": 1.5,
+              "duty": 0.4,
+              "bridges": 12,
+              "bridgeW": 3
+            },
+            "phyllo": {
+              "N": 420,
+              "size": 0.55,
+              "grad": 0
+            },
+            "voronoi": {
+              "N": 240,
+              "web": 3,
+              "jitter": 0.6,
+              "seed": 7
+            },
+            "superformula": {
+              "N": 18,
+              "rows": 7,
+              "m": 5,
+              "n1": 0.8,
+              "n2": 1.2,
+              "n3": 1.2,
+              "size": 0.82,
+              "grad": 0,
+              "spin": 0,
+              "stagger": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "link": {
+    "mode": "linked",
+    "detune": 0,
+    "mirror": true
+  },
+  "motion": {
+    "mode": "motor",
+    "offset": 0,
+    "snap": 0,
+    "bookmarks": [],
+    "rpmA": 0.5,
+    "rpmB": 0
+  },
+  "process": {
+    "profile": "Laser",
+    "minWeb": 1.2,
+    "minHole": 1,
+    "clearance": 0.5,
+    "split": false,
+    "seam": 4,
+    "fillSmall": true,
+    "capsSeparate": true
+  },
+  "room": {
+    "W": 4900,
+    "D": 4150,
+    "H": 2700,
+    "lampZ": 940,
+    "exposure": 1,
+    "ambient": 0.015
+  },
+  "res": 0.7,
+  "export": {
+    "format": "laser",
+    "omitCaps": false,
+    "shells": "both",
+    "kerf": 0.15,
+    "strip": true,
+    "stripW": 10,
+    "joint": "print",
+    "tabs": 8,
+    "tabW": 10,
+    "tabExtra": 3,
+    "flange": 4,
+    "fit": 0.1,
+    "depth": 5,
+    "lip": 1.6,
+    "plate": 2.4
+  }
+}

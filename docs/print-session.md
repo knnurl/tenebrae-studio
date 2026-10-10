@@ -30,7 +30,7 @@ Don't try Route B on the P2S. Every layer would need two filament swaps, which a
 ## Before the session
 
 - [ ] **Studio version:** open https://knnurl.github.io/tenebrae-studio/ and hard-refresh. You need commit `951f219` or later, which has the overhang check.
-- [ ] **Design:** use `design.json` from `~/Downloads/tenebrae-cut-printed-caps-2026-10-02.zip`, the latest version, with top caps only. Load it with **Open design**.
+- [ ] **Design:** [`print-design.json`](print-design.json) in this folder, the latest version, with top caps only. Load it with **Open design**.
 - [ ] **Filament:** black PLA for the body. Grey or light colours glow under the LED and wash out the shadows.
   - Route B also needs Bambu PETG Basic, any colour, for the interface.
 - [ ] **Bed:** textured PEI, clean.
@@ -46,7 +46,7 @@ The design still has the 3 mm wall from the laser sheet. For FDM, 2 mm is enough
 
 ## Studio steps
 
-1. **Open design:** load the `design.json` above.
+1. **Open design:** load [`print-design.json`](print-design.json).
 2. **Export → Format → 3D print (STL).** The process switches back to FDM, and the toast confirms it.
 3. **Route A only:** go to **Pattern** and set **Twist** to **0.85**. In linked mode the outer shell follows.
    - Check the room preview; the lobes should still be there.
@@ -69,7 +69,7 @@ The design still has the 3 mm wall from the laser sheet. For FDM, 2 mm is enough
 - Supports **off**.
 
 ### Route B (H2D)
-Start from [`PETG-interface.3mf`](PETG-interface.3mf) in this folder (also in `~/Downloads`). It is a settings-only Bambu Studio project, with no model, saved for an X1E, so change these:
+Start from [`PETG-interface.3mf`](PETG-interface.3mf) in this folder. It is a settings-only Bambu Studio project, with no model, saved for an X1E, so change these:
 - [ ] **Printer profile:** Bambu Lab H2D, 0.4 nozzle.
 - [ ] **Filaments:** PLA (black) is filament 1, PETG is filament 2. Map them to **different nozzles** so swaps are nozzle switches, not purges.
 - [ ] **Support threshold angle:** from **30° to 50°**. At 30° the slicer generates nothing, because the slot ceilings lean 34–40°.
